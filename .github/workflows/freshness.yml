@@ -1,0 +1,40 @@
+name: freshness
+
+# Detects drift between the bundled snapshots and the latest Octelium release:
+# - JSON Schemas published at https://octelium.com/schemas/octelium/latest/
+# - `--help` output of the latest octelium, octeliumctl and octops releases
+# A failure means a maintainer should regenerate, review the diff, and update the skills.
+
+on:
+  schedule:
+    - cron: "17 6 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  schemas:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compare schema snapshot with the published schemas
+        run: scripts/sync_schemas.sh --check
+
+  cli-reference:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install the latest Octelium CLIs
+        run: |
+          mkdir -p "$RUNNER_TEMP/bin"
+          curl -fsSL https://octelium.com/install.sh | INSTALL_DIR="$RUNNER_TEMP/bin" USE_SUDO=false bash
+      - name: Regenerate CLI references
+        run: |
+          VER="$("$RUNNER_TEMP/bin/octelium" version -o json 2>/dev/null | python3 -c 'import json,sys; print(json.load(sys.stdin)["releaseVersion"])')"
+          python scripts/generate_cli_reference.py --bin-dir "$RUNNER_TEMP/bin" --version "$VER"
+      - name: Fail on drift
+        run: git diff --exit-code -- skills/

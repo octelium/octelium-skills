@@ -1,0 +1,31 @@
+# First named administrators, replacing the initial root/root-init access.
+# Before applying: create the IdP client secret yourself (the value is prompted, never stored here):
+#   octeliumctl create secret oidc-client-secret
+# Replace every <PLACEHOLDER>. Use `allow-all` instead of `octelium-api-full-access` only if the
+# admins must also reach every Service.
+kind: Group
+metadata:
+  name: cluster-admins
+spec:
+  authorization:
+    policies: ["octelium-api-full-access"]
+---
+kind: User
+metadata:
+  name: <ADMIN_NAME>
+spec:
+  type: HUMAN
+  email: <ADMIN_EMAIL>
+  groups: ["cluster-admins"]
+---
+kind: IdentityProvider
+metadata:
+  name: oidc
+spec:
+  displayName: Login with <PROVIDER>
+  oidc:
+    issuerURL: <ISSUER_URL>
+    clientID: <CLIENT_ID>
+    clientSecret:
+      fromSecret: oidc-client-secret
+    checkEmailVerified: true

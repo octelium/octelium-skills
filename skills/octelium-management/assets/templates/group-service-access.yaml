@@ -1,0 +1,21 @@
+# Give one Group access to one Service, and nothing else.
+kind: Group
+metadata:
+  name: <GROUP>
+spec: {}
+---
+kind: Service
+metadata:
+  name: <SERVICE>.<NAMESPACE>
+spec:
+  mode: WEB
+  config:
+    upstream:
+      url: <UPSTREAM_URL>
+  authorization:
+    inlinePolicies:
+      - spec:
+          rules:
+            - effect: ALLOW
+              condition:
+                match: '"<GROUP>" in ctx.user.spec.groups'

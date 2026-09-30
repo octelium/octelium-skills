@@ -1,0 +1,19 @@
+# Secretless CI access: a GitHub Actions workflow logs in with its OIDC token.
+# The workflow uses octelium/github-action@v2 with `audience` equal to the one below.
+kind: IdentityProvider
+metadata:
+  name: github-actions
+spec:
+  oidcIdentityToken:
+    issuerURL: https://token.actions.githubusercontent.com
+    audience: https://<DOMAIN>
+---
+kind: User
+metadata:
+  name: <CI_USER>
+spec:
+  type: WORKLOAD
+  authentication:
+    identities:
+      - identityProvider: github-actions
+        identifier: repo:<ORG>/<REPO>:ref:refs/heads/<BRANCH>

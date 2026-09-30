@@ -1,0 +1,23 @@
+{
+  "name": "octelium",
+  "displayName": "Octelium",
+  "version": "0.1.0",
+  "description": "Official Octelium skills: install Clusters (single-node quick installer or production Kubernetes), operate them with octops, manage resources and Policies with octeliumctl, and connect to Services with the octelium client.",
+  "author": {
+    "name": "Octelium Labs, LLC",
+    "url": "https://octelium.com"
+  },
+  "homepage": "https://octelium.com/docs/octelium/latest",
+  "repository": "https://github.com/octelium/octelium-skills",
+  "license": "Apache-2.0",
+  "keywords": [
+    "octelium",
+    "zero-trust",
+    "ztna",
+    "remote-access",
+    "wireguard",
+    "kubernetes",
+    "access-control",
+    "policy"
+  ]
+}

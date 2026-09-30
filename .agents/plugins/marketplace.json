@@ -1,0 +1,20 @@
+{
+  "name": "octelium",
+  "interface": {
+    "displayName": "Octelium"
+  },
+  "plugins": [
+    {
+      "name": "octelium",
+      "source": {
+        "source": "local",
+        "path": "./"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Developer Tools"
+    }
+  ]
+}

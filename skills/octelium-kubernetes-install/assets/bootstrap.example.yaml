@@ -1,0 +1,38 @@
+# Bootstrap for `octops init <DOMAIN> --bootstrap bootstrap.yaml` (octelium v0.40.0+).
+# Replace every <PLACEHOLDER>. Datastore passwords are referenced from Kubernetes Secrets that you
+# create beforehand in a namespace other than `octelium` (init deletes and re-creates `octelium`).
+# Genesis truncates the PostgreSQL resource table and flushes the Redis DB: both must be dedicated.
+spec:
+  primaryStorage:
+    postgresql:
+      host: <POSTGRES_HOST>
+      port: 5432
+      username: <POSTGRES_USER>
+      database: <POSTGRES_DATABASE>
+      passwordFromSecret:
+        name: <K8S_SECRET_NAME>
+        namespace: <K8S_SECRET_NAMESPACE>
+        key: password
+      isTLS: true
+  secondaryStorage:
+    redis:
+      host: <REDIS_HOST>
+      port: 6379
+      passwordFromSecret:
+        name: <K8S_SECRET_NAME>
+        namespace: <K8S_SECRET_NAMESPACE>
+        key: password
+      database: 0
+      isTLS: true
+  # Optional sections; delete what you don't need.
+  # network:
+  #   mode: DUAL_STACK            # or V6_ONLY / V4_ONLY
+  #   v4:
+  #     clusterNetwork: 100.64.0.0/10
+  #   wireguard:
+  #     gatewayPort: 53820
+  # cni:
+  #   confDir: /var/lib/rancher/k3s/agent/etc/cni   # only for non-standard CNI paths
+  # ingress:
+  #   frontProxy:
+  #     enable: true                                 # only behind a TLS-terminating L7 proxy

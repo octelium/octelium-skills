@@ -1,0 +1,17 @@
+{
+  "name": "octelium",
+  "description": "Official Octelium plugins for Claude Code.",
+  "owner": {
+    "name": "Octelium Labs, LLC",
+    "url": "https://octelium.com"
+  },
+  "plugins": [
+    {
+      "name": "octelium",
+      "source": "./",
+      "description": "Install, operate, manage and connect to Octelium zero trust Clusters.",
+      "category": "infrastructure",
+      "tags": ["zero-trust", "ztna", "security", "kubernetes"]
+    }
+  ]
+}

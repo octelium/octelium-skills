@@ -1,0 +1,25 @@
+# Expose a private upstream (behind NAT) through a WORKLOAD User that runs
+#   octelium connect --serve <SERVICE>   (e.g. in Docker, Kubernetes or a VM)
+# Issue its token with: octeliumctl create cred --user <CONNECTOR_USER> --expire-in 90days
+kind: User
+metadata:
+  name: <CONNECTOR_USER>
+spec:
+  type: WORKLOAD
+---
+kind: Service
+metadata:
+  name: <SERVICE>
+spec:
+  mode: HTTP
+  config:
+    upstream:
+      url: http://<HOST_AS_SEEN_BY_CONNECTOR>:<PORT>
+      user: <CONNECTOR_USER>
+  authorization:
+    inlinePolicies:
+      - spec:
+          rules:
+            - effect: ALLOW
+              condition:
+                match: '"<GROUP>" in ctx.user.spec.groups'

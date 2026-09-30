@@ -1,0 +1,27 @@
+{
+  "name": "octelium",
+  "version": "0.1.0",
+  "description": "Official Octelium skills: install Clusters (single-node quick installer or production Kubernetes), operate them with octops, manage resources and Policies with octeliumctl, and connect to Services with the octelium client.",
+  "author": {
+    "name": "Octelium Labs, LLC",
+    "url": "https://octelium.com"
+  },
+  "homepage": "https://octelium.com/docs/octelium/latest",
+  "repository": "https://github.com/octelium/octelium-skills",
+  "license": "Apache-2.0",
+  "keywords": ["octelium", "zero-trust", "ztna", "remote-access", "wireguard", "kubernetes", "access-control"],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Octelium",
+    "shortDescription": "Install, operate, manage and connect to Octelium Clusters",
+    "longDescription": "Workflow skills for the Octelium zero trust secure access platform: the single-node quick installer, production installation on Kubernetes with octops, Day-2 Cluster operations (upgrades, TLS certificates, diagnostics), declarative resource and Policy management with octeliumctl, and client-side access with the octelium CLI.",
+    "developerName": "Octelium Labs, LLC",
+    "category": "Developer Tools",
+    "websiteURL": "https://octelium.com",
+    "defaultPrompt": [
+      "Install a single-node Octelium Cluster on this VM",
+      "Give the ops Group access to the production PostgreSQL Service",
+      "Connect to my Octelium Cluster and reach the demo-nginx Service"
+    ]
+  }
+}
