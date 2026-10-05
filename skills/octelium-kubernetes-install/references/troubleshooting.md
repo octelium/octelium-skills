@@ -25,8 +25,12 @@ kubectl -n octelium logs <pod> --all-containers --tail=200
 | Front proxy: redirect loops or 404s | Proxy terminating TLS without front-proxy mode, or forwarding to the wrong port | Front proxy must forward to `octelium-ingress-dataplane.octelium.svc:8080` with `spec.ingress.frontProxy.enable: true` set at init. |
 | An `octelium` namespace already exists before init | A previous installation exists | Stop: init would wipe it. Decide with the user between upgrade (octelium-cluster-ops) and a deliberate reinstall. |
 
-Re-running `octops init` after a failed first attempt is acceptable (the datastores hold nothing
-worth keeping yet). After a successful install, never use init to "fix" things.
+A failed first attempt does not prove that the datastores are empty. Inspect the existing
+namespace, Genesis Job status/logs, datastore identity and any serving resources. Continue
+diagnosing the existing Job instead of launching another init. Even with no namespace, init
+can reset preserved database contents: it truncates the resource table and flushes the configured
+Redis DB. Re-run only for an intended reset after establishing the existing data and required
+backups. After a successful install, use diagnosis or upgrade rather than init to "fix" things.
 
 Community support: https://github.com/octelium/octelium/issues (include versions, the Genesis
 logs with secrets redacted, and the Kubernetes distribution/CNI).

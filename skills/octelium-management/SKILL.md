@@ -17,6 +17,7 @@ metadata:
   author: Octelium Labs, LLC
   version: "0.1.0"
   verified-against: octelium v0.43.0
+  source-checked: octelium fe628332 (2026-10-05)
 ---
 
 # Octelium: manage Cluster resources
@@ -37,39 +38,40 @@ superuser, and nothing is reachable unless a Policy allows it.
 
 ## Ground rules
 
-These encode how `octeliumctl` v0.43.0 actually behaves. Follow them unless the user
-explicitly asks otherwise and confirms the consequences.
+Check the installed CLI's capabilities; the bundled CLI reference is v0.43.0. Follow these
+rules unless the user explicitly asks otherwise and confirms the consequences.
 
 1. **Look before you change.** `octeliumctl get <kind> <name> -o yaml` for every resource you
    touch, and the Policies involved. Never assume a resource's current content.
 2. **`apply` replaces whole resources.** Each document is the complete desired spec; any field
    you omit is reset. To edit an existing resource, export it, change only what was asked,
    and apply the full document. ClusterConfig is the same: its entire spec is replaced.
-3. **`apply` has no dry-run and doesn't stop on problems.** Unknown fields are only warned
-   about and silently dropped; a resource rejected by server validation (invalid value, missing
-   reference, already exists) is reported and skipped while the rest is applied. So validate and
-   preview first, then read the apply output line by line:
-   - `scripts/validate_resources.py <paths>` checks documents against the published JSON Schemas;
-   - `scripts/plan_apply.py <paths> [same flags as apply]` lists creates, updates (with fields
-     that will be reset) and deletions, using read-only `get` calls.
-   Run them with `uv run` or `python3` from this skill's directory.
+3. **Validate and preview before apply.** Check `octeliumctl validate --help` and
+   `octeliumctl apply --help`. When supported, use `validate <paths>` and
+   `apply --dry-run <paths> [same flags as apply]`. Validation is local; dry-run reads current
+   state, skips mutations and does not guarantee server acceptance or reserve state. On older
+   CLIs, use `scripts/validate_resources.py` and `scripts/plan_apply.py` with `uv run` or
+   `python3` from this skill's directory. The helpers also add risk warnings and field-level
+   previews. Apply still drops unknown fields with a warning and can skip rejected resources
+   while applying the rest. Read its output for partial success.
 4. **`--prune` is destructive across kinds.** It deletes every non-system resource of *each
    included kind* that isn't in the given paths, including kinds with no documents there. A
    bare `octeliumctl apply --prune ./services/` would delete all Users, Groups, Policies,
    IdentityProviders, Namespaces, Credentials and Configs, including the built-in `root` User,
    the `root-init` Credential and the `allow-all` Policy. Use `--prune` only when the user asks
    and the paths are the complete source of truth for the kinds you restrict it to with
-   `--include`; always run `plan_apply.py --prune` with the same flags and show the deletions
-   first.
+   `--include`; preview with native dry-run when supported and run `plan_apply.py --prune`
+   with the same flags for danger detection. Show the deletions first.
 5. **Never widen access to fix a denial.** Don't attach `allow-all`, add `matchAny` ALLOW rules,
    disable Policies, remove DENY rules, or set `isPublic`/`isAnonymous` to make something work,
    unless the user explicitly asks for that exact change. Diagnose (references/policies.md),
    then propose the narrowest rule and say who gains what.
-6. **Keep secrets out of files, arguments and output.** Don't put secret values in YAML, in
-   `--value` arguments or in chat. Have the user run `octeliumctl create secret <name>`
+6. **Keep secrets out of ordinary files, arguments and output.** Don't put secret values in
+   committed or unprotected YAML, `--value` arguments or chat. Have the user run `octeliumctl create secret <name>`
    (interactive prompt) in their terminal, or use `--file <path>`, `--from-env VAR` or stdin
    (`-f -`). Reference Secrets by name (`fromSecret: <name>`). New Credential tokens are shown
-   once: hand them to the user, don't log or commit them.
+   once: have the user create them in their terminal, or capture output to an authorized private
+   file without reading its contents into the transcript (references/identity-and-access.md).
 7. **Don't lock the admins out.** Before deleting or changing `root`, `root-init`, `allow-all`,
    admin Users/Groups, IdentityProviders, or Policies on the `octelium-api` Namespace, confirm
    another admin identity exists and works (e.g. `octeliumctl get user <admin>` and a test
@@ -92,8 +94,11 @@ explicitly asks otherwise and confirms the consequences.
    request path (Service, Namespace, User, Groups, ClusterConfig global Policies).
 4. **Author** the smallest change. Start from exported YAML for existing resources; use
    `assets/templates/` and the references for new ones; check fields against the schema.
-5. **Validate** with `scripts/validate_resources.py`. Fix every error; review every warning.
-6. **Preview** with `scripts/plan_apply.py` using the same paths and flags you will apply. Show
+5. **Validate** with native `octeliumctl validate` when supported, or
+   `scripts/validate_resources.py` on older CLIs. Use the helper for additional risk warnings.
+   Fix every error; review every warning.
+6. **Preview** with native `octeliumctl apply --dry-run` when supported, or
+   `scripts/plan_apply.py` on older CLIs, using the same paths and flags you will apply. Show
    the user the plan when it updates or deletes anything, touches Policies or identity, or
    exposes a Service publicly.
 7. **Apply** exactly what was previewed: `octeliumctl apply <paths> [flags]`. Read the output for
@@ -107,6 +112,7 @@ explicitly asks otherwise and confirms the consequences.
 | Task | Command |
 | --- | --- |
 | Apply desired state | `octeliumctl apply <file-or-dir>... [--include K] [--exclude K] [--include-secret] [--prune]`; `-` reads stdin |
+| Validate / preview (when supported) | `octeliumctl validate <paths>`; `octeliumctl apply --dry-run <paths> [apply flags]` |
 | Read | `octeliumctl get <kind> [name] [-o yaml\|json]`; list flags `--page`, `--items-per-page`, `--order-by-name`, `--order-reverse`; filters `get svc --namespace`, `get cred\|sess\|dev\|authn --user` |
 | Kinds for `get` | `service svc`, `namespace ns`, `user usr`, `group grp`, `policy pol`, `identityprovider idp`, `credential cred`, `session sess`, `device dev`, `authenticator authn`, `secret sec`, `config cfg`, `clusterconfig cc`, `gateway gw`, `region rgn` |
 | Create imperatively | `create secret`, `create config`, `create credential`, `create namespace` (everything else via `apply`) |

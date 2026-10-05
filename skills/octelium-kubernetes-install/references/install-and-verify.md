@@ -5,13 +5,16 @@ Docs: https://octelium.com/docs/octelium/latest/install/cluster/installing-clust
 ## Command
 
 ```bash
-octops init <DOMAIN> --bootstrap <file|-> \
+OCTELIUM_AUTH_TOKEN_SAVE_PATH=<private-new-file> OCTELIUM_SKIP_MESSAGES=true \
+  octops init <DOMAIN> --bootstrap <file|-> \
   [--kubeconfig <path>] [--kubecontext <ctx>] [--version <v>]
 ```
 
 - Default kubeconfig: `$KUBECONFIG`, else `$HOME/.kube/config`. Always pass the intended
   context explicitly.
 - `--version` defaults to `latest`; pin a version for reproducible installs.
+- Create the token destination with `umask 077` and `mktemp` before init, as in SKILL.md;
+  report its path only. Don't overwrite an existing credential file or print its contents.
 - Environment variables read by `octops init` (v0.43.0):
 
   | Variable | Effect |
@@ -32,7 +35,8 @@ octops init <DOMAIN> --bootstrap <file|-> \
    `octelium_resources` and **flushes** the Redis DB; creates ClusterConfig, Region, Namespaces,
    system Services, built-in Policies, the `root` User and the `root-init` Credential; deploys the
    components (API server, auth server, Nocturne, Octovigil, Ingress, Gateway Agents, DNS, Portal).
-4. Waits for the Kubernetes Secret `octelium/init-token`, then prints (or saves) the login command.
+4. Waits for the Kubernetes Secret `octelium/init-token`, then saves the token to the configured
+   file. Without `OCTELIUM_SKIP_MESSAGES=true`, it also prints the token-bearing login command.
 
 ## Verify
 
@@ -98,7 +102,8 @@ only.
 1. Give the user the token file path (from `OCTELIUM_AUTH_TOKEN_SAVE_PATH`). The token is also
    retrievable by anyone who can read `octelium/init-token` in Kubernetes while the `root-init`
    Credential exists.
-2. The user logs in: `octelium login --domain <DOMAIN> --auth-token "$(cat <file>)"`.
+2. The user logs in: `OCTELIUM_AUTH_TOKEN="$(cat <private-file>)" octelium login --domain <DOMAIN>`.
+   For another machine, transfer it privately to a mode-0600 file there first.
 3. Create named admins, an IdentityProvider and access Policies, then delete `root-init`
    (octelium-management skill). Delete the token file afterwards.
 4. Optional: deploy an OpenTelemetry collector as `octelium-collector` in `octelium` for access

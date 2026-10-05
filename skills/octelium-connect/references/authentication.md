@@ -12,7 +12,7 @@ Docs: https://octelium.com/docs/octelium/latest/user/cli/authentication.md
 | --- | --- | --- |
 | Human on a machine with a browser | `octelium login` (or `--web`) | Opens `https://<DOMAIN>/login`, waits for approval through a local callback. Must be run by the human. |
 | Human on a headless server | Web login cannot complete there. Use an authentication token issued for the User, or connect from a machine with a browser. | Ask an admin for a token if needed. |
-| Workload (server, container, VM) | `--auth-token <TOKEN>` or `OCTELIUM_AUTH_TOKEN` | Token is an authentication-token _Credential_ (`octeliumctl create cred --user <user>`). |
+| Workload (server, container, VM) | `OCTELIUM_AUTH_TOKEN` | Token is an authentication-token _Credential_ (`octeliumctl create cred --user <user>`). |
 | Workload with an OIDC identity (Kubernetes SA, GitHub Actions, Azure, generic JWT) | `--assertion <type>[:options]` or `OCTELIUM_AUTH_ASSERTION` | Secretless; needs an `oidcIdentityToken` _IdentityProvider_ and a matching identity on the User. |
 | Short-lived scripts or serverless | `OCTELIUM_ACCESS_TOKEN=<token>` | No login step; the token is used directly. |
 | Inside a Cordium sandbox / proxy mode | Nothing to do | `OCTELIUM_AUTH_PROXY_SOCKET` is set; `login` is refused by design. |
@@ -23,9 +23,8 @@ Docs: https://octelium.com/docs/octelium/latest/user/cli/authentication.md
 export OCTELIUM_DOMAIN=example.com            # PowerShell: $env:OCTELIUM_DOMAIN = "example.com"
 
 octelium login                                # browser/IdP (human runs it)
-octelium login --auth-token "$TOKEN"          # authentication token
-OCTELIUM_AUTH_TOKEN="$TOKEN" octelium login   # same, via env var (keeps it out of argv)
-octelium connect --auth-token "$TOKEN"        # authenticate and connect in one step
+OCTELIUM_AUTH_TOKEN="$TOKEN" octelium login   # authentication token, kept out of argv
+OCTELIUM_AUTH_TOKEN="$TOKEN" octelium connect # authenticate and connect in one step
 
 octelium login --assertion k8s                            # service account token at /var/run/secrets/kubernetes.io/serviceaccount/token
 octelium login --assertion github-actions                 # audience defaults to the Cluster domain
@@ -38,8 +37,9 @@ octelium status                               # who am I, which Session, Cluster
 octelium logout                               # deletes the Session locally and on the Cluster
 ```
 
-Prefer the environment variable over `--auth-token` on shared machines: command-line
-arguments are visible in the process list and shell history.
+Supply `TOKEN` through a secret store or a private file, not a literal assignment in shell
+history. Prefer the environment variable over `--auth-token`: command-line arguments are
+visible in the process list and shell history. The agent must not read the token into output.
 
 `--logout` is a global flag that logs out after the command finishes. It is useful in
 ephemeral environments (e.g. `octelium connect --logout ...` in a container) so that
@@ -51,11 +51,11 @@ Scopes voluntarily narrow a Session's permissions below what Policies grant. The
 when authenticating with `--auth-token` or `--assertion`, and they never widen access.
 
 ```bash
-octelium login --auth-token "$TOKEN" --scope "service:svc1"            # one Service in the default Namespace
-octelium login --auth-token "$TOKEN" --scope "service:svc1.ns1"        # one Service in ns1
-octelium login --auth-token "$TOKEN" --scope "service:ns2/*"           # every Service in ns2
-octelium login --auth-token "$TOKEN" --scope "api:core"                # only the Core API
-octelium login --auth-token "$TOKEN" --scope "api:core.MainService/ListService"
+OCTELIUM_AUTH_TOKEN="$TOKEN" octelium login --scope "service:svc1"     # one Service in the default Namespace
+OCTELIUM_AUTH_TOKEN="$TOKEN" octelium login --scope "service:svc1.ns1" # one Service in ns1
+OCTELIUM_AUTH_TOKEN="$TOKEN" octelium login --scope "service:ns2/*"    # every Service in ns2
+OCTELIUM_AUTH_TOKEN="$TOKEN" octelium login --scope "api:core"         # only the Core API
+OCTELIUM_AUTH_TOKEN="$TOKEN" octelium login --scope "api:core.MainService/ListService"
 ```
 
 Use scopes to give automation least privilege; they are not a replacement for Policies.

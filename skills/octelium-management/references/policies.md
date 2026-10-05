@@ -13,20 +13,26 @@ For each request, the policy decision point collects the rules of every Policy t
   Credential that created it) and the **Device** if any (principal side);
 - **global** Policies in `ClusterConfig.spec.authorization`.
 
-Then, considering rule priorities (below):
+Rules are evaluated by priority: `-4` is highest, `4` lowest, default `0`.
 
-1. any matching `DENY` → denied;
-2. else any matching `ALLOW` → allowed;
-3. else → denied (default deny).
+1. Find the highest priority with a matching rule.
+2. At that priority, a matching `DENY` wins; otherwise a matching `ALLOW` allows.
+3. If no rule matches, deny (default deny).
 
-Priority is an integer from `-4` (highest) to `4` (lowest), default `0`. A matching rule of a
-higher priority wins over matching rules of lower priority; at equal priority, `DENY` wins.
+Rules at lower priorities do not change that decision. Array order does not make an ALLOW
+beat a DENY at the same priority.
 There is no superuser: even the API server (`default.octelium-api`) is an ordinary gRPC Service
 that needs an ALLOW. Session scopes can only narrow the result further.
 
 A standalone Policy has no effect until it is attached (`authorization.policies: [...]`) to a
 Service, Namespace, User, Group, Credential (`--policy`), or ClusterConfig. Inline Policies
 (`authorization.inlinePolicies: [{spec: {...}}]`) live inside those resources.
+
+Attachment controls scope: `allow-all` on a Service grants access to that Service; on a
+Namespace, to its Services. On a User, Group or Session it can grant that principal access to
+every Service, including the API; globally it can grant everyone access. Higher-priority rules,
+DENY ties and Session scopes still apply. Credential Policies add to User/Group grants; a
+narrow Credential ALLOW does not remove broader inherited ALLOWs.
 
 ## Rule structure
 
@@ -156,14 +162,22 @@ spec:
         not: '"contractors" in ctx.user.spec.groups'
   rules:
     - effect: ALLOW
+      priority: -1
       condition:
         match: ctx.request.http.method in ["GET", "HEAD", "OPTIONS"]
     - effect: DENY
+      priority: 0
       condition:
         matchAny: true
 ```
 
-Require phishing-resistant authentication for production (global, in ClusterConfig; remember
+The ALLOW at `-1` wins for read methods; the fallback DENY at `0` denies other methods.
+This follows the built-in `http-read-only` and `octelium-api-read-only` Policies. An ALLOW at
+the default `0` would tie the DENY and deny read methods too. Attach this to an HTTP/WEB
+Service; it ignores non-contractors, whose access is decided by their other Policies.
+Other matching rules at a higher priority still win.
+
+Require Sessions labelled AAL3 for humans in production (global, in ClusterConfig; remember
 apply replaces the whole ClusterConfig spec):
 
 ```yaml
@@ -184,8 +198,10 @@ spec:
                     - not: ctx.session.status.authentication.info.aal == "AAL3"
 ```
 
-The AAL value comes from `aalRules` on the IdentityProvider (identity-providers docs); without
-such rules no Session reaches AAL3 and this denies all humans. Check before applying.
+Verify the actual Session authentication info. For IdentityProvider logins, check `aalRules`
+and how they map trusted claims (identity-providers docs); without an AAL3 assignment this
+denies all humans in production. An administrator-assigned label alone does
+not independently verify phishing resistance or compliance with an external assurance standard.
 
 L7 examples (put them in `all.of` with the identity condition):
 
@@ -197,15 +213,29 @@ L7 examples (put them in `all.of` with the identity condition):
 - match: ctx.request.grpc.serviceFullName == "payments.v1.PaymentService" && ctx.request.grpc.method == "GetInvoice"
 ```
 
+PostgreSQL checks connection authorization by default. Before using
+`ctx.request.postgres.query.query` or `.parse.query` to enforce statement rules, set this in
+the Service's active config (and each dynamic config that needs it):
+
+```yaml
+config:
+  postgres:
+    authorization:
+      mode: ALL
+```
+
+Test both simple-query and extended-query/parse requests. A connection rule alone does not
+check every statement. Use database permissions for read-only database access as well.
+
 ## Changing Policies safely
 
 1. List every place the change applies: `octeliumctl get pol <name> -o yaml`, then find what
    references it (grep exported Users, Groups, Services, Namespaces, ClusterConfig for the name).
 2. Prefer adding a narrow rule on the resource that needs it over editing a shared Policy.
-3. Prefer `ALLOW` rules scoped by identity and resource over priority tricks. Use negative
-   priorities only for deliberate overrides (break-glass), and say so.
+3. Prefer `ALLOW` rules scoped by identity and resource. Set priorities deliberately when
+   precedence is needed (such as the read-only recipe above); explain which rules they override.
 4. Global (ClusterConfig) and Namespace-level Policies affect many requests: preview with
-   `plan_apply.py` and state the blast radius.
+   native dry-run when supported, or `plan_apply.py`, and state the blast radius.
 5. Deleting a Policy that is still attached leaves a dangling reference; detach first.
 6. `isDisabled: true` is a reversible way to switch a Policy off for diagnosis; it can open or
    close access, so treat it like any other change.

@@ -25,7 +25,7 @@ The quick installer turns a fresh Linux host into a complete Cluster: K3s (Traef
 secrets encryption on), Multus, PostgreSQL and Valkey in the `default` Kubernetes namespace,
 the Octelium CLIs, and `octops init`. It is idempotent and resumable, keeps its state in
 `/etc/octelium/installer`, and logs to `/var/log/octelium-install.log`. Treat it as the
-controller of the installation: fix causes and re-run it, don't hand-replicate its steps.
+controller of the installation: diagnose its state before resuming, don't hand-replicate its steps.
 
 ## Scope
 
@@ -44,9 +44,12 @@ controller of the installation: fix causes and re-run it, don't hand-replicate i
    names, never on their workstation or an existing Kubernetes node.
 2. **Use a domain the user controls.** Never invent one. It can be a subdomain
    (`octelium.example.com`). The Cluster is permanently identified by it.
-3. **Recover by re-running.** On failure, read the error block and the log, fix the specific
-   cause, and re-run the *same* command. The installer resumes; it reuses existing K3s,
-   credentials and data, and skips `octops init` once bootstrapped.
+3. **Check bootstrap state before resuming.** Inspect installer ownership, datastore identity,
+   the `bootstrapped` marker, the `octelium` namespace and the Genesis Job. A re-run skips
+   `octops init` only when the marker and namespace both exist and identity checks pass.
+   Failure during init, a missing marker after success, or a missing namespace can lead to init
+   again and a datastore reset. Diagnose the existing Job and establish data/backup requirements
+   first (references/recovery-and-removal.md).
 4. **Destructive options need an explicit, informed yes.** Don't add `--force`, `--reset-db`,
    `--uninstall`, `--purge-data` or `-y/--yes` as a troubleshooting step. Explain what each one
    destroys (references/recovery-and-removal.md) and use it only when the user asks for that
@@ -57,11 +60,12 @@ controller of the installation: fix causes and re-run it, don't hand-replicate i
    gone even if the database directory was kept. Export resources first if they matter.
 6. **`--version` is not an upgrade.** On an installed Cluster it only warns. Upgrades use
    `octops upgrade` (octelium-cluster-ops).
-7. **The initial token is a root credential.** It is printed at the end of the install (and
-   so is in the install log) and saved to `/etc/octelium/installer/init-token` (mode 0600).
-   Don't paste it into chat or files; tell the user where it is.
+7. **The initial token is a root credential.** Run with `OCTELIUM_SKIP_MESSAGES=true`, passed
+   explicitly through `sudo env`, so init saves it to `/etc/octelium/installer/init-token`
+   (mode 0600) without printing it. Report the path only. Historical logs from unsuppressed runs
+   can contain the token; filter login lines before reading them into the transcript.
 8. **Long-running, root-only.** It must run as root and takes minutes (up to ~20+ on small
-   hosts). From an agent, run it with a long timeout or in the background and follow the log;
+   hosts). From an agent, run it with a long timeout or in the background and follow filtered logs;
    don't interrupt it mid-way.
 
 ## Workflow
@@ -77,15 +81,17 @@ controller of the installation: fix causes and re-run it, don't hand-replicate i
    `df -h / /var/lib /mnt`, `ip -4 route get 1.1.1.1`, `ss -lntp | grep -E ':(80|443|6443) '`,
    `command -v k3s kubeadm kubectl`. Compare the `src` address from `ip -4 route get 1.1.1.1`
    with `curl -4s https://checkip.amazonaws.com`: if they differ, the host is behind NAT. Stop
-   and ask if another Kubernetes, a web server on 443, or an existing `/etc/octelium/installer`
-   (a previous run) is present.
+   and ask if another Kubernetes or a web server on 443 is present. For an existing
+   `/etc/octelium/installer`, follow the recovery reference to establish whether resuming
+   will skip init or reset data.
 3. **Open the cloud firewall / security group** (the installer can't): TCP `443` (Ingress),
    UDP `53820` (WireGuard), plus UDP `8443` with `--quicv0`. TCP `80` optional.
 4. **Fetch and inspect:**
    `curl -fsSL -o install-cluster.sh https://octelium.com/install-cluster.sh` then
    `bash install-cluster.sh --help`. Show the user the final command.
-5. **Install:** `sudo bash install-cluster.sh --domain <DOMAIN> [--nat] [--public-ip IP] ...`.
-   Follow `/var/log/octelium-install.log`. Success ends with an `installation complete` summary.
+5. **Install:** `sudo env OCTELIUM_SKIP_MESSAGES=true bash install-cluster.sh --domain <DOMAIN> [--nat] [--public-ip IP] ...`.
+   Follow `/var/log/octelium-install.log` with login lines filtered (recovery reference).
+   Success ends with an `installation complete` summary; report the token path, never its value.
 6. **Public DNS** (user's DNS provider): `A <DOMAIN> → <PUBLIC_IP>` and
    `CNAME *.<DOMAIN> → <DOMAIN>` (a wildcard `A` record also works). With `--quicv0`, also one
    record per Gateway hostname.
@@ -94,8 +100,9 @@ controller of the installation: fix causes and re-run it, don't hand-replicate i
    `octops cert <DOMAIN> --cert fullchain.pem --key privkey.pem --kubeconfig /etc/rancher/k3s/k3s.yaml`.
    Details and renewal automation: references/post-install.md.
 8. **First login** from the user's own machine:
-   `octelium login --domain <DOMAIN> --auth-token <token from /etc/octelium/installer/init-token>`
-   (the user runs it). Before the real certificate is installed this fails TLS verification;
+   supply the token from `/etc/octelium/installer/init-token` through `OCTELIUM_AUTH_TOKEN`, then
+   run `octelium login --domain <DOMAIN>` (post-install reference; the user runs it).
+   Before the real certificate is installed this fails TLS verification;
    `OCTELIUM_INSECURE_TLS=true` works for that single command.
 9. **Next steps:** create named admins and an IdentityProvider, then retire `root-init`
    (octelium-management); test access with `octelium connect -p demo-nginx:9000` then

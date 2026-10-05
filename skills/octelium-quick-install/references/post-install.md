@@ -59,13 +59,15 @@ Cluster watches. Without a TTY it doesn't prompt; confirm with the user before r
 
 ## 3. First login and admin
 
-The installer summary shows the initial token path; `octops init` also printed a ready-made
-`octelium login --domain <DOMAIN> --auth-token <TOKEN>` line into the terminal and the install log.
+The installer summary shows the initial token path. With `OCTELIUM_SKIP_MESSAGES=true`, init
+suppresses the token-bearing login message. Historical unsuppressed runs can contain that
+message in the terminal and install log; don't read raw logs into the transcript.
 
 - The user runs the login on their own machine (install the CLI there first:
-  `curl -fsSL https://octelium.com/install.sh | bash`). Retrieve the token on the server with
-  `sudo cat /etc/octelium/installer/init-token` and pass it to the login directly; don't paste it
-  into chat or tickets.
+  `curl -fsSL https://octelium.com/install.sh | bash`). Transfer the token privately into a
+  mode-0600 file on that machine. The user runs
+  `OCTELIUM_AUTH_TOKEN="$(cat /private/path/init-token)" octelium login --domain <DOMAIN>`,
+  then removes the local copy. Don't paste it into chat, tickets, or command-line arguments.
 - Before step 2 is done, login fails with `x509: certificate signed by unknown authority`;
   prefix that one command with `OCTELIUM_INSECURE_TLS=true` if the user wants to continue now.
 - This token belongs to the `root` User through the `root-init` Credential (valid about six
@@ -80,9 +82,30 @@ The installer summary shows the initial token path; `octops init` also printed a
   open it in ufw/firewalld, but if the host has no firewall, block it in the cloud firewall except
   from trusted addresses.
 - Back up `/etc/octelium/installer` and the database together (the password and the data belong
-  together). A logical dump is the most portable:
-  `kubectl -n default exec statefulset/octelium-postgresql -c postgres -- sh -c 'PGPASSWORD="$POSTGRES_PASSWORD" pg_dump --host=127.0.0.1 --username="$POSTGRES_USER" octelium' > octelium-$(date +%F).sql`.
-  Dumps contain Octelium Secret values in plaintext: store them encrypted.
+  together), plus installation/Bootstrap settings, certificates/private keys and encryption key
+  material where applicable. A logical dump is portable; capture it to a private new file as
+  below and store it encrypted. Test the restore for the intended recovery objective. A resource
+  API export is configuration migration, not a complete backup.
 - For access logs, deploy an OpenTelemetry collector as `octelium-collector` in namespace
   `octelium` (octelium-management troubleshooting reference).
 - Plan upgrades with `octops upgrade <DOMAIN> --check` (octelium-cluster-ops).
+
+From Bash in an authorized backup directory:
+
+```bash
+(
+  set -euo pipefail
+  umask 077
+  dump_file="$(mktemp ./octelium-backup.XXXXXX.sql)"
+  if kubectl -n default exec statefulset/octelium-postgresql -c postgres -- sh -c 'PGPASSWORD="$POSTGRES_PASSWORD" pg_dump --host=127.0.0.1 --username="$POSTGRES_USER" octelium' > "$dump_file"; then
+    printf '%s\n' "$dump_file"
+  else
+    rm -f "$dump_file"
+    exit 1
+  fi
+)
+```
+
+Dumps contain Octelium Secret values in plaintext. Keep the directory private, encrypt the
+backup, and never print its contents into the transcript. A failed dump is removed rather than
+reported as a backup.

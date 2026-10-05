@@ -81,10 +81,18 @@ certificates) is the operator's responsibility and must be ready or planned firs
    `valkey-cli` or `redis-cli` against the exact host/port/TLS settings) before init.
 6. **Install** (after explicit confirmation):
    ```bash
-   OCTELIUM_AUTH_TOKEN_SAVE_PATH="$HOME/.octelium/<DOMAIN>.init-token" OCTELIUM_SKIP_MESSAGES=true \
-     octops init <DOMAIN> --bootstrap bootstrap.yaml --kubeconfig <path> --kubecontext <ctx> [--version <v>]
+   (
+     set -euo pipefail
+     umask 077
+     token_file="$(mktemp ./octelium-init-token.XXXXXX)"
+     printf '%s\n' "$token_file"
+     OCTELIUM_AUTH_TOKEN_SAVE_PATH="$token_file" OCTELIUM_SKIP_MESSAGES=true \
+       octops init <DOMAIN> --bootstrap bootstrap.yaml --kubeconfig <path> --kubecontext <ctx> [--version <v>]
+   )
    ```
-   It blocks until the Cluster is ready (often several minutes). Run with a long timeout or in
+   Report the protected token path only. On failure, retain the file privately for diagnosis;
+   the command may have saved a token before a later failure. It blocks until the Cluster is
+   ready (often several minutes). Run with a long timeout or in
    the background; follow `kubectl -n default logs -f job/octelium-genesis`.
 7. **Verify, DNS, TLS, first login** → references/install-and-verify.md: pods Ready in
    `octelium`, `octelium-ingress-dataplane` has an external address, DNS `A <DOMAIN>` +

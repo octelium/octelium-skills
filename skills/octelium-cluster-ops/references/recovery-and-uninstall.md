@@ -9,13 +9,21 @@ The Cluster has no superuser; API access comes only from Policies. Options, in o
    months after install). With Kubernetes access:
 
    ```bash
-   kubectl -n octelium get secret init-token -o jsonpath='{.data.data}' | base64 -d > /secure/path/init-token
-   chmod 600 /secure/path/init-token
+   (
+     set -euo pipefail
+     umask 077
+     token_file="$(mktemp /secure/path/init-token.XXXXXX)"
+     trap 'rm -f "$token_file"' EXIT
+     kubectl -n octelium get secret init-token -o jsonpath='{.data.data}' | base64 -d > "$token_file"
+     OCTELIUM_AUTH_TOKEN="$(cat "$token_file")" octelium login --domain <DOMAIN>
+   )
    ```
 
-   Quick-install hosts also keep it at `/etc/octelium/installer/init-token`. The user logs in with
-   `octelium login --domain <DOMAIN> --auth-token "$(cat /secure/path/init-token)"`, repairs
-   access, then deletes the file.
+   The user runs this in Bash with an existing private `/secure/path` directory. Permissions
+   are set before capture; producer failure stops login, and the temporary copy is removed on
+   exit. Quick-install hosts also keep it at `/etc/octelium/installer/init-token`. For login from
+   another machine, transfer the token privately to a mode-0600 file there, supply it through
+   `OCTELIUM_AUTH_TOKEN` and remove the local copy. Don't read its contents into the transcript.
 3. **Neither available:** there is no documented recovery command. Don't edit the PostgreSQL
    database or Octelium's Kubernetes objects by hand, and don't reinstall (that wipes everything).
    Collect the facts and ask upstream: https://github.com/octelium/octelium/issues or the
@@ -52,6 +60,16 @@ kubectl taint nodes --all octelium.com/gateway-init- 2>/dev/null || true
 Then, if asked: drop the PostgreSQL database and Redis data, remove DNS records, revoke
 certificates, and delete the datastore credential Secrets.
 
-Before any uninstall, offer an export of resources (`octeliumctl get <kind> -o yaml` per kind and
-`octeliumctl get cc -o yaml`) and a database backup; Secret values can't be exported through the
-API.
+Before any uninstall, establish the recovery objective and backups. For configuration migration,
+use the management skill's `scripts/export_resources.py`, or the standalone paginated procedure
+in the quick-install recovery reference. Read every page through `listResponseMeta.hasMore`,
+extract each `.items[]` into its own document, omit system resources and server-managed
+metadata/status, and export ClusterConfig separately. Raw list wrappers are not applicable
+documents. Preserve name-based references and Config data; validate the stream before use.
+
+If neither skill is installed, export each required kind with `get <kind> --page <N> -o json`,
+starting at page 1, and perform that extraction/filtering until `hasMore` is false. Keep the
+export in a private file. This excludes Secret values, issued Credential tokens and operational
+Session/Device/Authenticator state. Full recovery needs a consistent datastore backup,
+Bootstrap/installer settings, datastore credentials, certificates/private keys and encryption
+key material where applicable, with a tested restore; API export alone is not disaster recovery.

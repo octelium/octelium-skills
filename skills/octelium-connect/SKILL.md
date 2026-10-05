@@ -78,7 +78,7 @@ lets the machine reach, publish or serve _Services_. A Cluster is addressed by i
    | --- | --- |
    | Workstation, full access by hostname | `octelium connect -d` (detached; Linux uses `sudo systemd-run`) or foreground `sudo -E octelium connect` |
    | No root, or only a few Services needed | `octelium connect -p <svc>:<port> [-p <svc>.<ns>:<port>]` then use `localhost:<port>` |
-   | Container, no capabilities | `connect --auth-token ... -p <svc>:<port>` (gVisor userspace mode) |
+   | Container, no capabilities | `connect -p <svc>:<port>` with `OCTELIUM_AUTH_TOKEN` (gVisor userspace mode) |
    | This host must serve a Service | `octelium connect --serve <svc>[.<ns>]` or `--serve-all` |
    | Allow SSH into this host through the Cluster | `octelium connect --essh` |
 

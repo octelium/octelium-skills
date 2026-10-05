@@ -48,10 +48,14 @@ document **replaces the whole spec**, so always start from the exported YAML:
 ```bash
 octeliumctl get cc -o yaml > cluster-config.yaml
 # edit only the requested section
-uv run scripts/validate_resources.py cluster-config.yaml
+octeliumctl validate cluster-config.yaml
+octeliumctl apply --dry-run cluster-config.yaml
 uv run scripts/plan_apply.py cluster-config.yaml     # shows every changed/reset ClusterConfig field
 octeliumctl apply cluster-config.yaml
 ```
+
+Check the installed CLI's help first. On versions without native validation/dry-run, use
+`validate_resources.py` and `plan_apply.py` instead (apply-workflow.md).
 
 Sections:
 

@@ -6,7 +6,7 @@ the copy you downloaded; this file mirrors installer version 2.3.
 ## Usage
 
 ```bash
-sudo bash install-cluster.sh --domain example.com [options]
+sudo env OCTELIUM_SKIP_MESSAGES=true bash install-cluster.sh --domain example.com [options]
 sudo bash install-cluster.sh --uninstall [--purge-data]
 bash install-cluster.sh --help
 bash install-cluster.sh --print-manifests [--domain example.com]   # no root needed; prints generated manifests, passwords redacted
@@ -51,6 +51,10 @@ downloaded installers), `OCTELIUM_PG_IMAGE` (default `postgres:17-alpine`), `OCT
 `OCTELIUM_K3S_SERVICE_CIDR` (10.43.0.0/16), `OCTELIUM_WIREGUARD_PORT` (53820),
 `OCTELIUM_QUIC_PORT` (8443).
 
+For agent-run installation, pass `OCTELIUM_SKIP_MESSAGES=true` through `sudo env` as above.
+`octops init` inherits it and suppresses the token-bearing login message while still saving
+the token to the installer's private file. Do not rely on sudo preserving the caller's environment.
+
 ## What a run does (in order)
 
 1. Parse and validate arguments; require root; take the lock `/run/lock/octelium-installer.lock`;
@@ -72,7 +76,8 @@ downloaded installers), `OCTELIUM_PG_IMAGE` (default `postgres:17-alpine`), `OCT
 10. Pre-pull images; create credentials, storage (local PV), Multus, PostgreSQL and Valkey; wait
     for them and verify authentication.
 11. Bootstrap with `octops init <DOMAIN> --version <v> --bootstrap -` (skipped when already
-    bootstrapped). The initial token is saved to `/etc/octelium/installer/init-token`.
+    bootstrapped and the namespace still exists). The initial token is saved to
+    `/etc/octelium/installer/init-token`; the environment override above suppresses its printout.
 12. Install `--cordium`/`--enterprise` packages (`octops install-package`), print the summary.
 
 ## Files and locations
@@ -80,7 +85,7 @@ downloaded installers), `OCTELIUM_PG_IMAGE` (default `postgres:17-alpine`), `OCT
 | Path | Content |
 | --- | --- |
 | `/etc/octelium/installer/` (0700) | State: `domain`, `db-dir`, `db-size`, `postgres-password`, `valkey-password`, `k3s-owned`, `cluster-uid`, `bootstrapped`, `cluster-version`, `init-token`, package markers, firewall/NetworkManager records |
-| `/var/log/octelium-install.log` | Full log of every run (contains the printed login command with the token) |
+| `/var/log/octelium-install.log` | Full log of every run; unsuppressed historical runs can contain a login command with the token |
 | `/etc/rancher/k3s/k3s.yaml` | Kubeconfig (also copied to `/root/.kube/config` if absent) |
 | `/mnt/octelium/db` (default) | PostgreSQL data + `.octelium-installer` marker |
 | `/var/lib/rancher/k3s` | K3s data; CNI conf dir `/var/lib/rancher/k3s/agent/etc/cni/net.d` |

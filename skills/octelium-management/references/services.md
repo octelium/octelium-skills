@@ -128,8 +128,22 @@ spec:
       auth:
         password:
           fromSecret: pg-password
-      sslMode: REQUIRE
+      sslMode: VERIFY_FULL
 ```
+
+`VERIFY_FULL` verifies the certificate chain and the hostname in the upstream URL. Use the
+server's certified DNS name. For a private CA, add its PEM certificate under the same config:
+
+```yaml
+tls:
+  trustedCAs:
+    - <PEM_CA_CERTIFICATE>
+```
+
+System CAs are used by default. `REQUIRE` encrypts without verifying the server certificate;
+choose it only as an explicit environment decision. PostgreSQL statement Policies also need
+`config.postgres.authorization.mode: ALL`; by default authorization runs at connection setup
+(policies.md).
 
 Kubernetes API with a kubeconfig stored as a Secret:
 
@@ -208,6 +222,7 @@ what becomes reachable by whom.
 2. Upstream reachable from where it is served (Cluster network, or the serving User's host).
 3. Secrets referenced by `fromSecret` exist (`octeliumctl get sec <name>`).
 4. At least one ALLOW path exists for the intended Users, and nothing broader than asked.
-5. `validate_resources.py` clean; `plan_apply.py` shows exactly one CREATE.
+5. Native `validate` clean and `apply --dry-run` shows the intended CREATE when supported;
+   use `validate_resources.py` and `plan_apply.py` on older CLIs.
 6. After apply: `octeliumctl get svc <name> -o yaml` (status addresses), then a real request
    through `octelium connect` or the public URL.

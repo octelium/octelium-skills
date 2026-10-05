@@ -16,4 +16,4 @@ spec:
   authentication:
     identities:
       - identityProvider: github-actions
-        identifier: repo:<ORG>/<REPO>:ref:refs/heads/<BRANCH>
+        identifier: <OIDC_SUBJECT>

@@ -42,7 +42,7 @@ jq '.definitions["octelium.api.main.core.v1.Service.Spec"].properties.mode.enum'
 
 ## Naming
 
-- A name segment must match `^[a-z][a-z0-9-]{0,38}[a-z0-9]$`: 2–40 characters, starts with a
+- A name segment must match `^[a-z][a-z0-9-]{0,38}[a-z0-9]$`: 2 to 40 characters, starts with a
   lowercase letter, no leading/trailing or consecutive hyphens. Only Services take a second
   `.namespace` segment.
 - **Service names include the Namespace:** `metadata.name: web` means `web.default`;
@@ -72,11 +72,14 @@ Created during installation and **not** marked system, so you can edit or delete
 | Service | `essh.octelium` | Embedded SSH Service used by `octelium ssh`/`cp`. |
 | Service | `socks5.octelium` | Embedded SOCKS5 Service. |
 
-System resources (never touched by apply): Namespaces `default`, `octelium`, `octelium-api`;
+System resources (excluded from apply's current-state comparison and prune): Namespaces `default`, `octelium`, `octelium-api`;
 Services such as `default.octelium-api` (the API server, a gRPC Service), `auth.octelium-api`,
 `dns.octelium`, `portal.default`, `default.default`; the system `octelium` User; hidden internal
 Secrets. Access to the management API is itself governed by Policies on the `octelium-api`
 Namespace's Services.
+
+Filter system resources out of desired exports. Including them as desired documents can make
+apply attempt creates that the server rejects; the system flag in a file is not a skip rule.
 
 Packages (Cordium, Enterprise) may add their own resources. Inspect with `get` before pruning.
 

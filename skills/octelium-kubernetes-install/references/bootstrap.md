@@ -93,6 +93,12 @@ spec:
       isTLS: false
 ```
 
+PostgreSQL Bootstrap `isTLS: true` currently selects `sslmode=require`: it encrypts the
+connection but does not verify the server certificate or hostname. It is not the same as a
+POSTGRES Service's `sslMode: VERIFY_FULL`. The Bootstrap has no CA/verification field for this;
+use supported trusted network paths and datastore access controls, and establish whether this
+TLS behavior meets the deployment's requirements before choosing a remote datastore.
+
 Create the referenced Kubernetes Secrets without echoing values, e.g. with the user typing them:
 
 ```bash

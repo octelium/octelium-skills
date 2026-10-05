@@ -4,17 +4,29 @@
 
 On failure the installer prints the failing line and command, `full log: /var/log/octelium-install.log`,
 `rerunning this script resumes from where it stopped`, then non-Running pods and recent warning
-events. Datastore failures also dump the pod description and logs. Read those first.
+events. Datastore failures also dump the pod description and logs. Filter historical token
+lines before reading logs into the transcript (commands below).
 
-Default recovery loop: identify the cause → fix it on the host → re-run the exact same command.
-State (domain, db-dir, credentials, K3s ownership, bootstrap status) is reused. After a
-successful bootstrap, re-runs skip `octops init` and are safe.
+Before resuming, inspect `/etc/octelium/installer` file names and ownership, the recorded domain,
+db-dir and cluster identity, the database marker, `kubectl get namespace octelium` and
+`kubectl -n default get job octelium-genesis -o yaml`. Do not print password/token files or the
+Bootstrap Secret. Establish what data exists and which backup meets the recovery objective.
+
+- **Before bootstrap:** if init never ran and the configured stores are confirmed new or
+  disposable, fix the cause and resume the same command.
+- **Marker and namespace present:** if installer identity checks pass, re-running skips init.
+  Resume with the same inputs and `OCTELIUM_SKIP_MESSAGES=true`.
+- **Failure during init, missing marker or missing namespace:** re-running can invoke init,
+  truncate the resource table and flush Valkey. Inspect Genesis status/logs and any serving
+  resources first; a successful Job without an installer marker is not permission to reset it.
+  Diagnose the existing installation/Job. Run init again only for an intended reset after
+  establishing the data and backup requirements; a failed first command does not prove emptiness.
 
 ## Common errors
 
 | Message (abridged) | Cause | Fix |
 | --- | --- | --- |
-| `must run as root` | Not root | `sudo bash install-cluster.sh ...` |
+| `must run as root` | Not root | `sudo env OCTELIUM_SKIP_MESSAGES=true bash install-cluster.sh ...` |
 | `another Octelium installer is already running (PID n)` | Concurrent run | Wait for it; a stale lock is removed automatically. |
 | `--domain is required` / `invalid Cluster domain` | Missing/invalid FQDN | Pass a valid domain (letters, digits, hyphens, at least one dot). |
 | `installer state belongs to domain X, not Y (use --force to override)` | Different domain than the stored one | Use the original domain. Changing it means a new Cluster; see "Changing domain" below. |
@@ -32,19 +44,23 @@ successful bootstrap, re-runs skip `octops init` and are safe.
 | `Valkey is answering unauthenticated commands; refusing to continue` | Valkey misconfigured | Check the `octelium-valkey` Secret/Deployment; re-run. Don't bypass. |
 | `the Kubernetes API did not become ready within 15 minutes` | K3s failed to start | `journalctl -u k3s -n 200`; common causes: low memory, cgroups, conflicting firewall/CNI, missing kernel modules. |
 | `could not locate the K3s CNI binary directory` | Unexpected K3s layout | Check the K3s version; pin with `--k3s-version` if a recent release changed paths. |
-| Failure inside `octops init` | Cluster bootstrap problem | Inspect the bootstrap job `kubectl -n default logs job/octelium-genesis` and `kubectl -n octelium get pods`; fix the cause and re-run the installer. |
+| Failure inside `octops init` | Cluster bootstrap problem | Inspect `kubectl -n default logs job/octelium-genesis` and `kubectl -n octelium get pods`; follow the state checks above before any re-run that could invoke init. |
 
 Diagnostics (read-only):
 
 ```bash
 export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
-tail -n 200 /var/log/octelium-install.log
+sed '/--auth-token/d' /var/log/octelium-install.log | tail -n 200
 kubectl get nodes -o wide
 kubectl get pods -A | grep -v Running
 kubectl get events -A --field-selector=type=Warning --sort-by=.lastTimestamp | tail -30
 kubectl -n octelium get pods,jobs
 ls -l /etc/octelium/installer/        # file names only; don't print their contents
 ```
+
+For live progress, use `tail -n 200 -f /var/log/octelium-install.log | sed -u '/--auth-token/d'`.
+Run installation/resumption with `sudo env OCTELIUM_SKIP_MESSAGES=true bash install-cluster.sh ...`.
+Keep raw historical logs private; review other sensitive diagnostics locally before sharing.
 
 ## Destructive options: decide deliberately
 
@@ -62,13 +78,91 @@ ls -l /etc/octelium/installer/        # file names only; don't print their conte
 So after `--uninstall` followed by a new install, the preserved database directory does **not**
 keep your Users, Services, Policies, IdentityProviders or Credentials. Before a reinstall:
 
-1. Export what should survive (needs a working login):
-   `for k in ns pol idp grp usr svc cfg; do octeliumctl get $k -o yaml > backup-$k.yaml; done`
-   and `octeliumctl get cc -o yaml > backup-cc.yaml`.
-2. Note the Secret names (`octeliumctl get sec`); their values can't be exported and must be
-   re-created.
-3. After reinstall: re-create Secrets, then re-apply the exported resources (octelium-management),
-   and re-issue Credentials.
+1. Establish whether this is configuration migration or disaster recovery. Migration needs a
+   working API login and the source values for Secrets. Full recovery also needs a consistent
+   datastore backup, installer/Bootstrap settings, datastore credentials, TLS certificates and
+   private keys, and encryption key material where applicable, with a tested restore.
+2. Export applicable configuration. The management skill's `scripts/export_resources.py`
+   reads every page, emits individual documents and filters system resources. If that skill is
+   unavailable, use the standalone procedure below. Raw `get <kind> -o yaml` list wrappers
+   cannot be reapplied, and one page is incomplete.
+3. Keep the export private and validate it. Secret values and Credential tokens are not
+   recoverable from the API; preserve their original sources. API configuration export also
+   excludes Sessions, Devices and Authenticators and is not a datastore backup.
+4. For migration after an intended reset: re-create Secrets, apply the configuration in kind
+   order, re-issue Credentials and verify admin login and Service access. Review references and
+   ClusterConfig if changing domains. Do not start the reset until the backups meet the objective.
+
+### Standalone configuration export
+
+Requires Bash and Python 3, a working `octeliumctl` login and `OCTELIUM_DOMAIN` set. This reads
+every page through `listResponseMeta.hasMore`; the default is 200 items (maximum 1,000 per page).
+JSON objects separated by `---` are valid YAML documents. Server-managed metadata/status is
+omitted; spec references by name and Config data are preserved. Concurrent changes can make
+an API export inconsistent, so coordinate configuration changes during export.
+
+```bash
+(
+  set -euo pipefail
+  umask 077
+  export_file="$(mktemp ./octelium-config.XXXXXX.yaml)"
+  trap 'rm -f "$export_file"' EXIT
+  python3 - > "$export_file" <<'PY'
+import json
+import os
+import subprocess
+import sys
+
+env = dict(os.environ)
+env.pop("OCTELIUM_DEV", None)
+fields = {"name", "displayName", "description", "labels", "annotations", "tags", "picURL"}
+
+def read(*args):
+    proc = subprocess.run(["octeliumctl", "get", *args, "-o", "json", "--domain", env["OCTELIUM_DOMAIN"]],
+                          capture_output=True, text=True, env=env, stdin=subprocess.DEVNULL, timeout=120, check=True)
+    text = proc.stdout.strip()
+    result = {"items": []} if text.startswith("No ") and " found" in text else json.loads(text)
+    if not isinstance(result, dict):
+        raise ValueError("expected a resource or list object")
+    return result
+
+def portable(kind, item):
+    metadata = item.get("metadata") or {}
+    result = {"kind": kind, "metadata": {key: value for key, value in metadata.items() if key in fields},
+              "spec": item.get("spec") or {}}
+    if kind == "Config" and "data" in item:
+        result["data"] = item["data"]
+    return result
+
+try:
+    documents = []
+    for kind in ("Config", "Policy", "IdentityProvider", "Namespace", "Group", "User", "Service"):
+        page = 1
+        while True:
+            response = read(kind.lower(), "--page", str(page))
+            items = response.get("items", [])
+            meta = response.get("listResponseMeta") or {}
+            if not isinstance(items, list) or not isinstance(meta, dict):
+                raise ValueError("invalid list response")
+            for item in items:
+                if not item["metadata"].get("isSystem") and not item["metadata"].get("isSystemHidden"):
+                    documents.append(portable(kind, item))
+            if not meta.get("hasMore"):
+                break
+            if not items:
+                raise ValueError("empty page reports hasMore")
+            page += 1
+    documents.append(portable("ClusterConfig", read("cc")))
+    output = "".join("---\n" + json.dumps(document) + "\n" for document in documents)
+except (OSError, ValueError, KeyError, TypeError, AttributeError, subprocess.SubprocessError) as err:
+    print(f"export failed: {err}", file=sys.stderr)
+    sys.exit(2)
+sys.stdout.write(output)
+PY
+  trap - EXIT
+  printf '%s\n' "$export_file"
+)
+```
 
 ### Changing an installed Cluster's network mode (`--nat`, `--public-ip`)
 

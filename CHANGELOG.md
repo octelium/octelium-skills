@@ -9,7 +9,12 @@ Initial release, verified against Octelium v0.43.0 and quick installer 2.3.
 - Skills: `octelium-quick-install`, `octelium-kubernetes-install`, `octelium-cluster-ops`,
   `octelium-management`, `octelium-connect`.
 - `octelium-management` helper scripts: `validate_resources.py` (JSON Schema validation, risk
-  warnings) and `plan_apply.py` (read-only apply/prune preview).
+  warnings), `plan_apply.py` (read-only apply/prune preview) and `export_resources.py`
+  (paginated configuration export).
+- Native validation/dry-run guidance based on source checked on 5 October 2026, with v0.43.0
+  fallback workflows; strict helper parsing and regression tests.
+- Corrected Policy priorities, Credential scope guidance, recovery decisions, protected token
+  and backup handling, PostgreSQL verification defaults and GitHub OIDC subject examples.
 - Generated CLI references for `octelium`, `octeliumctl` and `octops` v0.43.0; bundled core/v1
   JSON Schema snapshot.
 - Claude Code and Codex plugin/marketplace manifests.

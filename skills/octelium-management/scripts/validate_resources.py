@@ -5,8 +5,8 @@
 # ///
 """Validate Octelium resource YAML against the published JSON Schemas, offline from the Cluster.
 
-`octeliumctl apply` has no dry-run and only *warns* about unknown fields (it silently drops
-them). Run this before applying:
+Prefer native `octeliumctl validate` when available. This helper adds JSON Schema checks and
+risk warnings, and supports older CLIs. `apply` only warns about unknown fields and drops them.
 
     uv run scripts/validate_resources.py ./octelium/            # or: python3 scripts/validate_resources.py ...
     uv run scripts/validate_resources.py svc.yaml --offline      # bundled schema snapshot only
@@ -31,7 +31,7 @@ from pathlib import Path
 from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from _common import NON_APPLY_KINDS, Doc, load_documents  # noqa: E402
+from _common import KNOWN_KINDS, NON_APPLY_KINDS, Doc, InputError, load_documents, report_error, resource_errors  # noqa: E402
 
 try:
     import jsonschema
@@ -121,7 +121,17 @@ def name_errors(doc: Doc) -> list[str]:
 def lint(doc: Doc) -> list[str]:
     """Advisory warnings for risky or surprising content."""
     w: list[str] = []
-    b, spec = doc.body, doc.body.get("spec") or {}
+    def mapping(value: Any) -> dict[str, Any]:
+        return value if isinstance(value, dict) else {}
+
+    def sequence(value: Any) -> list[Any]:
+        return value if isinstance(value, list) else []
+
+    def unconditional(rule: Any) -> bool:
+        rule = mapping(rule)
+        return rule.get("effect") == "ALLOW" and bool(mapping(rule.get("condition")).get("matchAny"))
+
+    b, spec = doc.body, mapping(doc.body.get("spec"))
     if doc.kind in NON_APPLY_KINDS:
         w.append(f"`octeliumctl apply` does not manage {doc.kind} resources; it will skip this document")
     api = b.get("apiVersion")
@@ -136,18 +146,20 @@ def lint(doc: Doc) -> list[str]:
             w.append("isAnonymous: anyone on the internet can reach this Service without authentication")
         elif spec.get("isPublic"):
             w.append("isPublic: reachable from the internet through the Ingress (authentication still required)")
-    for holder in ("authorization",):
-        auth = spec.get(holder) or {}
-        if "allow-all" in (auth.get("policies") or []):
-            w.append("attaches the `allow-all` Policy: full access to everything, including the Octelium API")
-        for ip in auth.get("inlinePolicies") or []:
-            for rule in ((ip or {}).get("spec") or {}).get("rules") or []:
-                if (rule or {}).get("effect") == "ALLOW" and ((rule or {}).get("condition") or {}).get("matchAny"):
-                    w.append("inline Policy with an unconditional ALLOW (matchAny)")
+    auth = mapping(spec.get("authorization"))
+    scope = ("this Service" if doc.kind == "Service" else
+             "every Service in this Namespace" if doc.kind == "Namespace" else
+             "every Service, including the Octelium API")
+    if "allow-all" in sequence(auth.get("policies")):
+        w.append(f"attaches the `allow-all` Policy: can grant access to {scope}; other Policies and Session scopes still apply")
+    for ip in sequence(auth.get("inlinePolicies")):
+        for rule in sequence(mapping(mapping(ip).get("spec")).get("rules")):
+            if unconditional(rule):
+                w.append(f"inline Policy with an unconditional ALLOW (matchAny): can grant access to {scope}")
     if doc.kind == "Policy":
-        for rule in spec.get("rules") or []:
-            if (rule or {}).get("effect") == "ALLOW" and ((rule or {}).get("condition") or {}).get("matchAny"):
-                w.append("rule ALLOWs unconditionally (matchAny): everything it is attached to becomes fully accessible")
+        for rule in sequence(spec.get("rules")):
+            if unconditional(rule):
+                w.append("rule ALLOWs unconditionally (matchAny): can grant every request within its attachment scope")
         if spec.get("isDisabled"):
             w.append("isDisabled: this Policy's rules are not evaluated")
     if doc.kind == "User" and spec.get("isDisabled"):
@@ -164,33 +176,34 @@ def main() -> int:
     ap.add_argument("--json", action="store_true", help="machine-readable output")
     args = ap.parse_args()
 
-    docs = load_documents(args.paths)
+    try:
+        docs = load_documents(args.paths)
+    except (InputError, UnicodeError) as err:
+        report_error(err, args.json)
+        return 1
+    except OSError as err:
+        report_error(err, args.json)
+        return 2
     source = SchemaSource(args.schema_dir, args.schema_base_url, args.offline)
     results = []
-    seen: dict[tuple[str, str], str] = {}
     n_err = 0
 
-    for doc in docs:
-        errors: list[str] = []
-        if not doc.kind:
-            errors.append("missing `kind`")
-        if not doc.name:
-            errors.append("missing `metadata.name`")
+    for doc, errors in zip(docs, resource_errors(docs)):
         if doc.name:
             errors += name_errors(doc)
-        key = (doc.kind, doc.full_name)
-        if doc.kind and doc.name:
-            if key in seen:
-                errors.append(f"duplicate {doc.kind} {doc.full_name!r} (also in {seen[key]})")
-            seen[key] = doc.where
         used = None
-        if doc.kind:
-            loaded = source.get(doc.kind)
-            if loaded is None:
-                errors.append(f"unknown kind {doc.kind!r} (no published core/v1 schema)")
-            else:
-                schema, used = loaded
-                errors += best_errors(jsonschema.Draft4Validator(schema), doc.body)
+        if doc.kind in KNOWN_KINDS:
+            try:
+                loaded = source.get(doc.kind)
+                if loaded is None:
+                    errors.append(f"unknown kind {doc.kind!r} (no published core/v1 schema)")
+                else:
+                    schema, used = loaded
+                    jsonschema.Draft4Validator.check_schema(schema)
+                    errors += best_errors(jsonschema.Draft4Validator(schema), doc.body)
+            except (OSError, ValueError, jsonschema.exceptions.SchemaError) as err:
+                report_error(err, args.json)
+                return 2
         warnings = lint(doc) if doc.kind else []
         n_err += len(errors)
         results.append({"where": doc.where, "kind": doc.kind, "name": doc.name,

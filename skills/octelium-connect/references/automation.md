@@ -74,9 +74,9 @@ helm install octelium-connector oci://ghcr.io/octelium/helm-charts/octelium \
   --set "octelium.serve={svc1,svc2}"      # or --set octelium.serveAll=true; replicaCount=N to scale
 ```
 
-Values set with `--set` are stored in the Helm release metadata; don't pass real tokens that way
-outside quick trials. Other values: `octelium.publish` with `service.enabled` (expose published
-Services inside that Kubernetes cluster), `octelium.auth.scopes`, `octelium.network.ipMode`,
+Values set with `--set` are stored in the Helm release metadata; use an existing Secret or an
+assertion instead of passing real tokens that way. Other values: `octelium.publish` with
+`service.enabled` (expose published Services inside that Kubernetes cluster), `octelium.auth.scopes`, `octelium.network.ipMode`,
 `octelium.dns.local.enabled`, `octelium.extraArgs`. Check the chart's `values.yaml` or
 `helm show values oci://ghcr.io/octelium/helm-charts/octelium` before relying on a key.
 
@@ -108,9 +108,23 @@ steps:
       command: logout
 ```
 
-The User's identity for GitHub assertions is the token `sub`, e.g.
-`repo:<ORG>/<REPO>:ref:refs/heads/<BRANCH>`. Forked-PR workflows don't receive repository
-secrets, another reason to prefer assertions. `extra-args` rejects `--detach`, `--domain`,
+Match the User's `identifier` to the intended job's exact token `sub`. GitHub.com repositories
+created after 15 July 2026 use owner/repository IDs in the default subject. Older repositories
+retain the previous format unless opted in; renames/transfers after that date also switch.
+GitHub Enterprise Server is excluded. Custom subject templates can differ.
+
+| Job context | Previous format | Immutable format |
+| --- | --- | --- |
+| Branch, without environment or PR event | `repo:<ORG>/<REPO>:ref:refs/heads/<BRANCH>` | `repo:<ORG>@<OWNER_ID>/<REPO>@<REPO_ID>:ref:refs/heads/<BRANCH>` |
+| Environment | `repo:<ORG>/<REPO>:environment:<ENV>` | `repo:<ORG>@<OWNER_ID>/<REPO>@<REPO_ID>:environment:<ENV>` |
+| Pull request, without environment | `repo:<ORG>/<REPO>:pull_request` | `repo:<ORG>@<OWNER_ID>/<REPO>@<REPO_ID>:pull_request` |
+
+Check OIDC settings or inspect only `sub` locally, without printing the JWT. Verify issuer,
+audience and exact subject; don't widen identity matching to fix a mismatch. Forked-PR secrets
+are normally withheld; an available assertion alone does not establish trust. Apply branch,
+environment and workflow protections before granting access. [GitHub OIDC reference](https://docs.github.com/en/actions/reference/security/oidc).
+
+`extra-args` rejects `--detach`, `--domain`,
 `--auth-token`, `--assertion`, `--homedir`. `command: install` with `components:` installs
 `octeliumctl` for management workflows.
 
@@ -118,7 +132,7 @@ Docs: https://octelium.com/docs/octelium/latest/management/guide/service/devops/
 
 ## Headless Linux servers (systemd)
 
-`octelium connect -d --auth-token ...` starts a transient `systemd-run` unit as root with
+`octelium connect -d` starts a transient `systemd-run` unit as root with
 `Restart=on-failure`. For a permanent service, use the packaged daemon or a unit that runs
 `octelium connect` with `OCTELIUM_DOMAIN` and `OCTELIUM_AUTH_TOKEN` supplied from a root-only
 environment file. Don't write tokens into world-readable unit files.

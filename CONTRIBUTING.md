@@ -16,7 +16,8 @@
 4. **Never invent.** Field names come from the JSON Schemas; flags from `--help`; URLs must exist.
    Every Octelium YAML example in the skills is validated against the bundled schemas by CI.
 5. **Safety first.** Destructive operations need explicit user consent; never recommend widening
-   access to fix a denial; never put secrets in arguments, files or transcripts.
+   access to fix a denial; never put secrets in arguments, committed or unprotected files,
+   or transcripts.
 6. **Descriptions are routing.** Front-load what the skill does and when to use it, name the
    neighbouring skills it should *not* handle, stay under 1024 characters. Update the evals when
    you change a description.
@@ -32,7 +33,8 @@
 5. If the quick installer changed, update `octelium-quick-install` (options, errors, state files).
 6. Bump `metadata.verified-against` in affected skills, and the bundle version in
    `.claude-plugin/plugin.json`, `.codex-plugin/plugin.json` and every skill's `metadata.version`.
-7. `uv run scripts/validate_repo.py`, `claude plugin validate --strict .`, and run the evals
+7. `uv run scripts/validate_repo.py`, `python3 -m unittest discover -s tests`,
+   `claude plugin validate --strict .`, and run the evals
    (`claude plugin eval .`), comparing with the previous run.
 8. Add a CHANGELOG entry.
 

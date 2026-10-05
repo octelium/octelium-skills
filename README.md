@@ -60,25 +60,31 @@ management helper scripts need Python 3.9+ with `pyyaml` and `jsonschema`; with
 ## How the skills are designed
 
 - **Workflows and judgment in `SKILL.md`, facts in references.** Each `SKILL.md` stays small (about
-  1–2k tokens): scope and hand-offs, ground rules, the workflow, and a routing table to reference
+  1k to 2k tokens): scope and hand-offs, ground rules, the workflow, and a routing table to reference
   files that agents load only when needed.
 - **Verified against the implementation.** Behaviors were checked against the Octelium source and
-  v0.43.0 binaries, not only the prose docs. Examples: `octeliumctl apply` replaces whole resources
-  and has no dry-run; `apply --prune` deletes missing resources of *every* included kind (including
+  v0.43.0 binaries, not only the prose docs. Examples: `octeliumctl apply` replaces whole resources;
+  `apply --prune` deletes missing resources of *every* included kind (including
   the built-in `root` User, `root-init` Credential and `allow-all` Policy); `octops init` deletes an
   existing `octelium` namespace and wipes the datastores it is given; `octops` confirmation prompts
   are skipped when there is no TTY; web login blocks waiting for a browser.
-- **Tools for what the CLI lacks.** `octelium-management` ships
+- **Native checks and supporting tools.** Prefer `octeliumctl validate` and
+  `octeliumctl apply --dry-run` when the installed CLI supports them. Both were confirmed in
+  Octelium source on 5 October 2026; the installed v0.43.0 binary lacks them. Validation is
+  local; dry-run reads current state without mutations and does not guarantee server acceptance.
+  `octelium-management` also ships
   `scripts/validate_resources.py` (validates YAML against the published JSON Schemas; `apply` only
   warns and drops unknown fields) and `scripts/plan_apply.py` (read-only preview of what `apply`
-  would create, replace and prune, flagging dangerous deletions).
+  would create, replace and prune, flagging dangerous deletions), plus `scripts/export_resources.py`
+  (paginated, apply-ready configuration export). The planner compares metadata and spec;
+  data and status are intentionally ignored except for the Secret update marker.
 - **Sources of truth, in order:** the installed CLI's `--help` for syntax; the JSON Schemas at
   `https://octelium.com/schemas/octelium/latest/core.v1.<Kind>.schema.json` for resource structure;
   the docs index `https://octelium.com/docs/octelium/latest/llms.txt` (every page has a `.md` twin)
   for current behavior; the bundled references as an offline snapshot.
 - **Safety rules, not a security boundary.** The skills keep agents conservative (no access
-  broadening to "fix" denials, no secrets in arguments or files, explicit consent for destructive
-  flags, no interactive logins run by the agent). What an agent can actually do is decided by
+  broadening to "fix" denials, no secrets in arguments or unprotected files, explicit consent
+  for destructive flags, no interactive logins run by the agent). What an agent can actually do is decided by
   Octelium's own authentication and Policies, and by the credentials the user gives it.
 
 ## Compatibility and versioning
@@ -99,6 +105,7 @@ management helper scripts need Python 3.9+ with `pyyaml` and `jsonschema`; with
 skills/<name>/           The skills (Agent Skills format)
 evals/                   Routing, safety and negative test cases (`claude plugin eval` format)
 scripts/                 Maintainer tooling: validation, CLI reference generation, schema sync
+tests/                   Helper and protected workflow regression tests
 .github/workflows/       CI: validation on every change, weekly freshness checks
 ```
 
@@ -106,6 +113,7 @@ scripts/                 Maintainer tooling: validation, CLI reference generatio
 
 ```bash
 uv run scripts/validate_repo.py                     # spec, links, manifests, YAML examples vs schemas, evals
+python3 -m unittest discover -s tests
 python3 scripts/generate_cli_reference.py --bin-dir <dir-with-release-binaries> --version vX.Y.Z
 scripts/sync_schemas.sh [--check]                   # refresh/check the bundled JSON Schemas
 claude plugin validate --strict .                   # Claude Code manifest checks

@@ -85,8 +85,11 @@ spec:
   authentication:
     identities:
       - identityProvider: github-actions
-        identifier: repo:acme/app:ref:refs/heads/main
+        identifier: <OIDC_SUBJECT>
 ```
+
+Set `identifier` to the intended job's exact token `sub`, including IDs or customized claims.
+Check the repository's OIDC settings and [GitHub's OIDC reference](https://docs.github.com/en/actions/reference/security/oidc).
 
 Other `oidcIdentityToken` forms: `jwksURL` + `issuer`, or inline `jwksContent` + `issuer` (for
 issuers that don't publish discovery, e.g. private Kubernetes clusters; Kubernetes identifiers
@@ -111,15 +114,36 @@ octeliumctl get cred --user ci-deployer
 octeliumctl delete cred ci-token
 ```
 
-- The token/secret is printed once. Deliver it to the user; don't store it in files, logs or
-  chat history. `-o json` output also contains it.
+- The token/secret is printed once; `-o json` also contains it. Have the user run creation in
+  their terminal, or capture output to an authorized private file without reading it into chat
+  or logs. Don't commit credentials or store them in ordinary or unprotected files.
 - `--policy` Policies are copied into every Session the Credential creates, on top of the
-  User's and Groups' Policies. Use them to narrow what a token is for (they can also grant, so
-  keep them minimal).
+  User's and Groups' Policies. They are additive: a narrow Credential ALLOW does not remove a
+  broader User/Group ALLOW. For example, a User in an `allow-all` Group still has that grant
+  when its Credential adds a Policy allowing just one Service. Use a dedicated WORKLOAD User
+  with limited grants, or Session scopes (`octelium login --scope ...`) to narrow access.
+  Restrictive DENY rules need deliberate priority relative to every applicable ALLOW.
 - Prefer short `--expire-in`, `--one-time` for bootstrap, and OIDC assertions over long-lived
   tokens for CI and Kubernetes.
 - `--expire-in` accepts values like `600seconds`, `45minutes`, `7hours`, `3days`, `2weeks`,
   `6months`.
+
+Protected capture, from Bash, when the user has authorized agent-run creation (report the
+file path only; the user imports it into their secret store and removes the local copy):
+
+```bash
+(
+  set -euo pipefail
+  umask 077
+  credential_file="$(mktemp ./octelium-credential.XXXXXX.json)"
+  if octeliumctl create cred --user ci-deployer --expire-in 1hour -o json > "$credential_file"; then
+    printf '%s\n' "$credential_file"
+  else
+    rm -f "$credential_file"
+    exit 1
+  fi
+)
+```
 
 ## Sessions, Devices, Authenticators
 
