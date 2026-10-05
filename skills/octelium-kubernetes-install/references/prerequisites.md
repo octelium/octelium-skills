@@ -4,8 +4,15 @@ Docs: https://octelium.com/docs/octelium/latest/install/cluster/pre-install.md
 
 ## Kubernetes and nodes
 
-- Any conformant Kubernetes (managed or self-hosted), amd64 or arm64 nodes (Cluster images
-  support both since v0.27.0).
+- Linux amd64 or arm64 worker nodes (Cluster images support both since v0.27.0), with a
+  container runtime and primary CNI that work with the chosen Multus deployment. Kubernetes
+  conformance alone doesn't establish these capabilities.
+- The Gateway Agent uses host networking, privileged init containers, `NET_ADMIN` and writable
+  host-path mounts. The provider mode, node OS and admission policy must permit these on the
+  data-plane nodes. Restricted or serverless node modes need verification before choosing them.
+- The operator needs permission to create cluster-scoped RBAC/CRDs and network attachment resources,
+  deploy DaemonSets, and label, annotate and taint nodes. The nodes must allow Octelium's
+  networking and filesystem changes; an immutable node OS needs an explicit supported plan.
 - Octelium uses the `octelium` namespace (created by init; an existing one is deleted).
 - **Node roles** (independent of Kubernetes' own control plane; an Octelium control-plane node is
   an ordinary worker):
@@ -64,7 +71,8 @@ directly, so:
 ## Ingress (public HTTPS entry)
 
 - Genesis creates the `LoadBalancer` Service `octelium-ingress-dataplane` (TCP 443) in `octelium`.
-  Managed Kubernetes provisions a cloud load balancer automatically.
+  Verify that the provider's load-balancer controller provisions a reachable address in the
+  selected cluster mode, with the required permissions, subnets and firewall rules.
 - Bare metal: provide a load-balancer implementation (MetalLB, kube-vip, Cilium LB-IPAM, ...),
   or for a single public node set `OCTELIUM_REGION_EXTERNAL_IP=<public IP>` when running
   `octops init` to use that address as the external IP.
@@ -86,12 +94,44 @@ deployment (CSI driver, default `csi.spiffe.io`). v0.40.0+: Bootstrap
 
 | Store | Purpose | Requirements |
 | --- | --- | --- |
-| PostgreSQL | Primary store for all resources | Dedicated database; user able to create tables in it; reachable from pods; TLS (`isTLS`) recommended for anything outside the cluster |
-| Redis-compatible (Redis, Valkey, managed Redis) | Cache and pub/sub between components | Dedicated instance or DB index (Genesis flushes it at init); AUTH password; TLS as needed |
+| PostgreSQL | Primary store for all resources | Dedicated database; permission to create and modify Octelium's tables and indexes; reachable from pods; credentials and TLS behavior verified |
+| Redis-compatible (Redis, Valkey, managed Redis) | Cache, locks and component events | Single endpoint compatible with the target release's commands; dedicated instance or DB index; password/ACL user and TLS as needed |
 
-Managed services (RDS/Cloud SQL/Azure Database, ElastiCache/Memorystore) or in-cluster
-operators (CloudNativePG, Valkey/Redis charts) all work. Plan backups (the PostgreSQL database is
-the Cluster's state, including Secrets in plaintext unless you add encryption at rest).
+Managed services and in-cluster operators are candidates, not a support guarantee. Check the
+actual service tier, endpoint and access policy from the pods that run Octelium.
+
+The Redis client uses `redis.NewClient`, not a Redis Cluster or Sentinel client. It doesn't
+discover shards or Sentinel primaries. Confirm ordinary key operations, expiration, transactions
+and Lua scripts, and the event commands used by the target release. Source checked on 5 October
+2026 uses Redis Streams (`XADD`, blocking `XREAD`, `XRANGE`, `XREVRANGE`) and client commands for
+reader cancellation; don't assume a restricted cache or serverless API implements them. Check
+pub/sub support for releases that use it. A nonzero Bootstrap `database` needs DB-index support.
+Init tries `FLUSHDB`, then falls back to `KEYS *` and `DEL`; the chosen index must be dedicated,
+and its ACL must permit clearing it. An authenticated `PING` alone doesn't establish compatibility.
+
+PostgreSQL Bootstrap `isTLS: true` selects `sslmode=require`, which encrypts without verifying
+the certificate or hostname. Redis TLS uses TLS 1.2 or later with normal certificate verification
+and system trust; the Bootstrap doesn't expose a custom CA field. Verify private CA trust for
+each client instead of inferring it from `isTLS`. See [bootstrap.md](bootstrap.md).
+
+Plan PostgreSQL backups and test restoration with the selected service/operator before relying
+on them. The database is the Cluster's state, including Secrets in plaintext unless you add
+encryption at rest; preserve datastore credentials, Bootstrap settings and certificate keys too.
+
+## Deployment evidence
+
+This repository has source checks and offline examples, but no recorded end-to-end test matrix
+for provider/CNI/datastore combinations. Before calling a combination tested, record:
+
+| Area | Record and verify |
+| --- | --- |
+| Kubernetes | Version, provider and operating mode; operator permissions and admission policy |
+| Nodes | Linux distribution/version, architecture, runtime, host paths and privileged networking |
+| CNI | Primary CNI and Multus versions/flavor; binary paths and delegate configuration |
+| Gateways | Scheduling, public/NAT addresses and client UDP reachability |
+| Ingress | Load-balancer implementation, public HTTPS, DNS and certificate verification |
+| Datastores | Versions/service tiers, endpoint mode, DB index, ACLs, TLS and restore result |
+| Outcome | Octelium version, install date, pod readiness and an authenticated Service request |
 
 ## Network ranges
 
@@ -106,7 +146,8 @@ entirely. Decide before installing.
 - [ ] data-plane and control-plane labels set; UDP 53820 (and 8443 for QUIC) open to data-plane nodes
 - [ ] `override-gw-ip` on NATed/multi-IP data-plane nodes
 - [ ] CNI + Multus healthy (Cilium non-exclusive); CNI conf dir known
+- [ ] Linux node/runtime capabilities, privileged/host-path policy and scheduling permissions verified
 - [ ] `LoadBalancer` works (or external IP plan / front proxy plan)
-- [ ] PostgreSQL + Redis reachable from pods, dedicated, credentials in Kubernetes Secrets
+- [ ] PostgreSQL + Redis reachable from pods, dedicated, credentials in Kubernetes Secrets; commands, TLS and backup/restore verified
 - [ ] domain chosen, DNS access, certificate plan (cert-manager recommended)
 - [ ] Octelium version chosen (`--version`, default `latest`)

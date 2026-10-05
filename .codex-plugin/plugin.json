@@ -9,7 +9,16 @@
   "homepage": "https://octelium.com/docs/octelium/latest",
   "repository": "https://github.com/octelium/octelium-skills",
   "license": "Apache-2.0",
-  "keywords": ["octelium", "zero-trust", "ztna", "remote-access", "wireguard", "kubernetes", "access-control"],
+  "keywords": [
+    "octelium",
+    "zero-trust",
+    "ztna",
+    "remote-access",
+    "wireguard",
+    "kubernetes",
+    "access-control",
+    "policy"
+  ],
   "skills": "./skills/",
   "interface": {
     "displayName": "Octelium",

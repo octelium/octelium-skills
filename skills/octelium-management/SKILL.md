@@ -39,7 +39,8 @@ superuser, and nothing is reachable unless a Policy allows it.
 ## Ground rules
 
 Check the installed CLI's capabilities; the bundled CLI reference is v0.43.0. Follow these
-rules unless the user explicitly asks otherwise and confirms the consequences.
+rules while preserving the user's authorized target and outcome. Prepare the concrete change
+and preview first; ask only for missing inputs or unresolved destructive scope.
 
 1. **Look before you change.** `octeliumctl get <kind> <name> -o yaml` for every resource you
    touch, and the Policies involved. Never assume a resource's current content.
@@ -51,8 +52,9 @@ rules unless the user explicitly asks otherwise and confirms the consequences.
    `apply --dry-run <paths> [same flags as apply]`. Validation is local; dry-run reads current
    state, skips mutations and does not guarantee server acceptance or reserve state. On older
    CLIs, use `scripts/validate_resources.py` and `scripts/plan_apply.py` with `uv run` or
-   `python3` from this skill's directory. The helpers also add risk warnings and field-level
-   previews. Apply still drops unknown fields with a warning and can skip rejected resources
+   `python3`. Resolve helper paths against the loaded skill directory, keeping the user's project
+   as the working directory so resource paths still refer to it. The helpers add risk warnings
+   and field-level previews. Apply still drops unknown fields with a warning and can skip rejected resources
    while applying the rest. Read its output for partial success.
 4. **`--prune` is destructive across kinds.** It deletes every non-system resource of *each
    included kind* that isn't in the given paths, including kinds with no documents there. A
@@ -78,16 +80,23 @@ rules unless the user explicitly asks otherwise and confirms the consequences.
    login by that admin).
 8. **Deletes and updates have no confirmation prompt.** `octeliumctl delete ...`, `update
    session --reject`, `update credential --disable` act immediately. State exactly what will
-   happen and get a yes first, unless the user already asked for that specific action.
+   happen and proceed if the user already authorized that target and outcome; ask only when
+   the scope or destructive effect remains unresolved.
 9. **Don't invent fields, enum values, names or references.** Take field names from the JSON
    Schema of the kind (references/resource-model.md lists the URLs); take names from `get`.
+
+In helper command examples, `octelium_skill_dir` is the absolute directory containing this
+loaded `SKILL.md`. Resolve it from the agent's skill location; don't change the project's working
+directory. For example: `uv run "$octelium_skill_dir/scripts/validate_resources.py" desired.yaml`.
 
 ## Workflow
 
 1. **Context.** Domain (`OCTELIUM_DOMAIN` or `--domain`), CLI version (`octeliumctl version`),
    authentication (octeliumctl shares the `octelium` Session; if none exists, the user must log
-   in: see the octelium-connect skill). Check API access with a harmless call, guarded so a
-   pending browser login can't hang you: `timeout 30 octeliumctl get ns` (GNU coreutils).
+   in: see the octelium-connect skill). Reuse authorized access; a diagnostic request doesn't
+   authorize reading tokens or starting browser login. Bound the first harmless API call with
+   the agent's command timeout. Use `timeout 30 octeliumctl get ns` only if GNU `timeout` is
+   available; on other hosts use the agent's equivalent and stop only the process you started.
 2. **Find the source of truth.** Ask whether the Cluster is managed from a Git directory of YAML.
    If so, edit those files instead of creating drift, and apply from there.
 3. **Inspect** current resources (`get ... -o yaml`), including every Policy that affects the

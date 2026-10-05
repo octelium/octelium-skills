@@ -11,20 +11,28 @@ permissions:
 jobs:
   validate:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.9", "3.12"]
     steps:
       - uses: actions/checkout@v4
 
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.12"
+          python-version: ${{ matrix.python-version }}
 
       - name: Install tools
-        run: python -m pip install pyyaml jsonschema skills-ref
+        run: python -m pip install pyyaml jsonschema
+
+      - name: Install Agent Skills reference validator
+        if: matrix.python-version == '3.12'
+        run: python -m pip install skills-ref
 
       - name: Repository checks (frontmatter, links, manifests, YAML examples vs schemas, evals)
         run: python scripts/validate_repo.py
 
       - name: Agent Skills reference validator
+        if: matrix.python-version == '3.12'
         run: |
           for d in skills/*/; do agentskills validate "$d"; done
 
@@ -34,5 +42,5 @@ jobs:
           python skills/octelium-management/scripts/plan_apply.py --help >/dev/null
           python skills/octelium-management/scripts/export_resources.py --help >/dev/null
 
-      - name: Helper regression tests
+      - name: Helper, workflow and maintenance regression tests
         run: python -m unittest discover -s tests

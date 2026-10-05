@@ -2,6 +2,10 @@
 
 Docs: https://octelium.com/docs/octelium/latest/management/core/overview.md
 
+For helper commands, set `octelium_skill_dir` to the absolute directory containing the loaded
+management `SKILL.md`. Keep the user's project as the working directory: input paths and output
+files below belong to that project, while helper paths belong to the installed skill.
+
 ## Check capabilities first
 
 ```bash
@@ -62,8 +66,8 @@ octeliumctl apply --dry-run web.yaml
 octeliumctl apply web.yaml
 ```
 
-For v0.43.0, replace validation and preview with `uv run scripts/validate_resources.py web.yaml`
-and `uv run scripts/plan_apply.py web.yaml`. The planner compares metadata display fields and
+For v0.43.0, replace validation and preview with `uv run "$octelium_skill_dir/scripts/validate_resources.py" web.yaml`
+and `uv run "$octelium_skill_dir/scripts/plan_apply.py" web.yaml`. The planner compares metadata display fields and
 spec; data and status are intentionally ignored, except that desired Secret data flags an
 existing Secret as an update. Use native dry-run to preview data operations where supported.
 
@@ -78,7 +82,7 @@ A list command (`get svc -o yaml`, for example) returns a wrapper with `items`, 
 resource documents. It returns one page: the default is 200 items, the maximum per page is
 1,000. Increasing page size does not replace following `listResponseMeta.hasMore`.
 
-From this skill's directory, use the helper to read every page, filter `isSystem` and
+Use the installed skill's helper to read every page, filter `isSystem` and
 `isSystemHidden`, keep names and editable metadata/spec, preserve Config data, and emit a YAML
 document per resource plus the ClusterConfig singleton:
 
@@ -87,7 +91,7 @@ document per resource plus the ClusterConfig singleton:
   set -euo pipefail
   umask 077
   export_file="$(mktemp ./octelium-config.XXXXXX.yaml)"
-  if uv run scripts/export_resources.py --domain <DOMAIN> > "$export_file"; then
+  if uv run "$octelium_skill_dir/scripts/export_resources.py" --domain <DOMAIN> > "$export_file"; then
     printf '%s\n' "$export_file"
   else
     rm -f "$export_file"
@@ -142,7 +146,7 @@ Only when the user asks for it, and only when the tree is the complete desired s
 ```bash
 octeliumctl validate ./octelium
 octeliumctl apply --dry-run --prune --include Service --include Namespace ./octelium
-uv run scripts/plan_apply.py --prune --include Service --include Namespace ./octelium
+uv run "$octelium_skill_dir/scripts/plan_apply.py" --prune --include Service --include Namespace ./octelium
 # review every DELETE line, then:
 octeliumctl apply --prune --include Service --include Namespace ./octelium
 ```
@@ -175,7 +179,7 @@ There are no `create user/group/service/policy/idp` commands: declare those kind
 | `scripts/export_resources.py [--include K]` | Paginated, apply-ready configuration export without system resources, Secrets or Credentials. | Read-only `octeliumctl get` |
 
 Validation and planning accept the same path arguments as apply (files, directories, `-`). Run with
-`uv run scripts/<name>.py ...` (dependencies declared inline) or `python3` with `pyyaml` and
+`uv run "$octelium_skill_dir/scripts/<name>.py" ...` (dependencies declared inline) or `python3` with `pyyaml` and
 `jsonschema` installed. Exit codes: validate 0/1 (invalid input)/2 (environment); plan 0/1
 (invalid input or dangers)/2 (usage/environment); export 0/2 (usage/environment). After dependency
 and argument checks, `--json` returns an `errors` array for loading/environment failures instead of a

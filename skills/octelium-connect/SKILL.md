@@ -38,13 +38,15 @@ lets the machine reach, publish or serve _Services_. A Cluster is addressed by i
 1. **Don't start a browser login unannounced.** `octelium login` (and any authenticated
    command when no Session exists, outside containers/CI) opens a browser on the machine
    running the CLI and blocks until someone approves the login there. Ask the user to run
-   `octelium login` themselves (in Claude Code: `! octelium login`), or, if they are at this
+   `octelium login` themselves, or, if they are at this
    machine and agree, run it with a timeout and tell them to approve it in the browser. On
    remote or headless hosts it can't complete: use an authentication token, OIDC assertion
    or access token instead (see references/authentication.md).
 2. **Guard the first authenticated call with a timeout** when you don't know whether a
-   Session exists, e.g. `timeout 30 octelium status`. If the output says it is waiting for
-   the browser, stop and hand off to the user.
+   Session exists. Prefer the agent's command timeout; `timeout 30 octelium status` works only
+   where GNU `timeout` is available. Reuse authorized access; a diagnostic request doesn't
+   authorize reading tokens or starting browser login. If the command waits for a browser,
+   stop only that process and hand off to the user.
 3. **Proxy mode:** if `OCTELIUM_AUTH_PROXY_SOCKET` is set (for example inside a Cordium
    sandbox), the CLI is already authenticated through a local proxy; `login` is refused by
    design. Don't run `login` or `logout` there.
@@ -71,7 +73,7 @@ lets the machine reach, publish or serve _Services_. A Cluster is addressed by i
    - Homebrew: `brew install octelium/tap/octelium`; Chocolatey: `choco install octelium`
    - Container: `ghcr.io/octelium/octelium`
    The installers ship all three CLIs: `octelium`, `octeliumctl`, `octops`.
-3. **Authenticate** with the right method → references/authentication.md.
+3. **Reuse valid access, or authenticate when needed** with the right method → references/authentication.md.
 4. **Choose how to connect** (details in references/connecting.md):
 
    | Situation | Command |
@@ -82,12 +84,14 @@ lets the machine reach, publish or serve _Services_. A Cluster is addressed by i
    | This host must serve a Service | `octelium connect --serve <svc>[.<ns>]` or `--serve-all` |
    | Allow SSH into this host through the Cluster | `octelium connect --essh` |
 
-   Foreground `connect` blocks. From an agent, prefer `-d`, or run it as a background
-   process and check its output, rather than blocking the session.
+   Foreground `connect` blocks. Check which timeout/background facilities and privileges are
+   available. Retain the handle/PID and private log path for any process you start; see
+   references/agent-execution.md. Detached mode may prompt for privileges.
 5. **Reach the Service** → references/accessing-services.md. Default Namespace:
    `<svc>` / `<svc>.local.<DOMAIN>`; other Namespaces: `<svc>.<ns>.local.<DOMAIN>`.
 6. **Verify** with a real request (`curl`, `ssh`, `psql`), then report what is connected and
-   how to stop it (`octelium disconnect`).
+   how to stop it. Stop a temporary test tunnel through its retained process handle; leave a
+   requested persistent connection running. Don't disconnect unrelated existing connections.
 
 ## Diagnose in layers
 
@@ -116,6 +120,7 @@ Read only the file the task needs:
 | Addressing Services, per-protocol clients, `octelium config`, `ssh`, `cp`, clientless/OAuth2 | [references/accessing-services.md](references/accessing-services.md) |
 | Docker, Kubernetes sidecars, Helm, GitHub Actions, headless servers | [references/automation.md](references/automation.md) |
 | Error messages and fixes | [references/troubleshooting.md](references/troubleshooting.md) |
+| Agent timeouts, background process ownership, cleanup, Claude Code terminal adapter | [references/agent-execution.md](references/agent-execution.md) |
 | Exact `octelium` flags (snapshot) | [references/cli-octelium.md](references/cli-octelium.md) |
 
 ## Sources of truth

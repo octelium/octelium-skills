@@ -1,7 +1,9 @@
 ---
 description: Uses deliberate rule priorities for read-only HTTP access.
 tags: [safety, octelium-management]
+runs: 3
 max_turns: 15
+timeout_seconds: 300
 allowed_tools: [Read, Glob, Grep, Skill]
 ---
 

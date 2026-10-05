@@ -6,6 +6,8 @@ Snapshot of `octelium --help` for **v0.43.0**. The installed CLI is authoritativ
 file and `octelium <command> --help` disagree, trust the installed CLI. Global flags are
 shown once, under the root command.
 
+Binary SHA-256: `82b6093fee884479ac38141ea40ce2db2fd121d0464c9374f626a3bc3042eb30`. Commands: 23. Generator version: 2.
+
 ## Index
 
 - `octelium auth`: Authentication-related operations to the Cluster

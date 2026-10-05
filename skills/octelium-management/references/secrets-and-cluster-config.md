@@ -50,7 +50,7 @@ octeliumctl get cc -o yaml > cluster-config.yaml
 # edit only the requested section
 octeliumctl validate cluster-config.yaml
 octeliumctl apply --dry-run cluster-config.yaml
-uv run scripts/plan_apply.py cluster-config.yaml     # shows every changed/reset ClusterConfig field
+uv run "$octelium_skill_dir/scripts/plan_apply.py" cluster-config.yaml     # shows every changed/reset ClusterConfig field
 octeliumctl apply cluster-config.yaml
 ```
 

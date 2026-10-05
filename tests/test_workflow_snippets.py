@@ -71,6 +71,34 @@ sys.exit(int(os.environ.get("OCTELIUM_TEST_FAILURE", "0")))
                 self.assertEqual(result.stdout, "")
                 self.assertEqual(list(self.directory.glob(pattern)), [])
 
+    def test_export_helper_uses_installed_path_and_preserves_project_directory(self) -> None:
+        skill = self.directory / "installed skill"
+        script = skill / "scripts/export_resources.py"
+        script.parent.mkdir(parents=True)
+        script.write_text('''
+import os
+from pathlib import Path
+
+assert Path.cwd() == Path(os.environ["OCTELIUM_TEST_DIR"])
+print("kind: Config\\nmetadata: {name: example}\\ndata: {key: synthetic}")
+''')
+        self.fake_command("uv", '''
+import subprocess
+import sys
+from pathlib import Path
+
+assert sys.argv[1] == "run"
+assert Path(sys.argv[2]).is_absolute()
+sys.exit(subprocess.call([sys.executable, *sys.argv[2:]]))
+''')
+        text = f"octelium_skill_dir='{skill}'\n" + self.recipe("octelium-management", "apply-workflow.md", 2)
+        result = self.run_recipe(text.replace("<DOMAIN>", "example.com"))
+        self.assertEqual(result.returncode, 0, result.stderr)
+        path = self.directory / result.stdout.strip()
+        self.assertEqual(path.parent, self.directory)
+        self.assertEqual(stat.S_IMODE(path.stat().st_mode), 0o600)
+        self.assertIn("kind: Config", path.read_text())
+
     def recovery_recipe(self) -> str:
         text = self.recipe("octelium-cluster-ops", "recovery-and-uninstall.md", 0)
         return text.replace("/secure/path/", str(self.directory) + "/").replace("<DOMAIN>", "example.com")

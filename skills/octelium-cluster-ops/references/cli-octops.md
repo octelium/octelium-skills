@@ -6,6 +6,8 @@ Snapshot of `octops --help` for **v0.43.0**. The installed CLI is authoritative:
 file and `octops <command> --help` disagree, trust the installed CLI. Global flags are
 shown once, under the root command.
 
+Binary SHA-256: `f4de95f4b88700dd3c262609cc99950a81a3e93ea3aeb82a529081d2e0998f72`. Commands: 7. Generator version: 2.
+
 ## Index
 
 - `octops certificate`: Set/rotate the TLS certificate for the Octelium Cluster

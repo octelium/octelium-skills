@@ -89,6 +89,9 @@ management helper scripts need Python 3.9+ with `pyyaml` and `jsonschema`; with
 
 ## Compatibility and versioning
 
+- Root `plugin.json` follows the portable [Agent Plugins format](https://agent-plugins.org/specification).
+  OpenAI presentation is under `extensions.com.openai`; derived Codex and Claude compatibility
+  manifests are retained. Installation doesn't log in to an Octelium Cluster.
 - The skill bundle is versioned independently of Octelium (semver, see [CHANGELOG.md](CHANGELOG.md)).
 - Each skill records what it was verified against in `metadata.verified-against`
   (currently Octelium v0.43.0 and quick installer 2.3). Newer Octelium versions are expected to
@@ -99,13 +102,14 @@ management helper scripts need Python 3.9+ with `pyyaml` and `jsonschema`; with
 ## Repository layout
 
 ```text
+plugin.json              Portable plugin manifest and shared metadata source
 .claude-plugin/          Claude Code plugin manifest + marketplace (plugin = repository root)
 .codex-plugin/           Codex plugin manifest
 .agents/plugins/         Codex marketplace
 skills/<name>/           The skills (Agent Skills format)
 evals/                   Routing, safety and negative test cases (`claude plugin eval` format)
 scripts/                 Maintainer tooling: validation, CLI reference generation, schema sync
-tests/                   Helper and protected workflow regression tests
+tests/                   Helper, protected workflow and maintenance regression tests
 .github/workflows/       CI: validation on every change, weekly freshness checks
 ```
 
@@ -114,11 +118,15 @@ tests/                   Helper and protected workflow regression tests
 ```bash
 uv run scripts/validate_repo.py                     # spec, links, manifests, YAML examples vs schemas, evals
 python3 -m unittest discover -s tests
+python3 scripts/generate_plugin_manifests.py [--check]
 python3 scripts/generate_cli_reference.py --bin-dir <dir-with-release-binaries> --version vX.Y.Z
 scripts/sync_schemas.sh [--check]                   # refresh/check the bundled JSON Schemas
 claude plugin validate --strict .                   # Claude Code manifest checks
-claude plugin eval .                                 # run the eval suite (uses model credits)
+claude plugin eval . --no-publish --runs 3 --max-cost-usd 5
 ```
+
+Model evals use credits; choose the budget. They test routing/advice, while the offline tests
+exercise helpers and maintenance behavior. See CONTRIBUTING for limits and private reports.
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for the release checklist and writing guidelines.
 

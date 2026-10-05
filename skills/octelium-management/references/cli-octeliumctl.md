@@ -6,6 +6,8 @@ Snapshot of `octeliumctl --help` for **v0.43.0**. The installed CLI is authorita
 file and `octeliumctl <command> --help` disagree, trust the installed CLI. Global flags are
 shown once, under the root command.
 
+Binary SHA-256: `5478c3d78e4fac2ab9861cf58427279e4bc84f0a1962921ecadec688833e5231`. Commands: 55. Generator version: 2.
+
 ## Index
 
 - `octeliumctl apply`: Apply the desired state to the Cluster

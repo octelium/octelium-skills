@@ -70,7 +70,7 @@ Keep raw historical logs private; review other sensitive diagnostics locally bef
 | `--force` | Bypasses ownership/identity checks; may adopt a foreign K3s or switch domain/db-dir, clearing bootstrap state → re-bootstrap | The user understands the specific check being overridden. |
 | `--uninstall` | Runs `k3s-uninstall.sh` (all K3s workloads and Kubernetes state on the host), removes installer firewall/NetworkManager changes and the kubectl symlink. Keeps database dir, state dir and CLIs. | The user wants the Cluster removed or intends a clean reinstall. |
 | `--uninstall --purge-data` | Everything above plus the database directory and `/etc/octelium/installer` (credentials, initial token) | Permanent removal. Irreversible. |
-| `-y` | Skips the confirmation prompt | Only after the user confirmed in the conversation, and only because there is no TTY. |
+| `-y` | Skips the confirmation prompt | Only for the target and destructive outcome the user already authorized; no repeated confirmation is needed. |
 
 ### Reinstalling means resetting Octelium's resources
 
@@ -178,9 +178,9 @@ another `--db-dir` and `--force`), install with the new domain, set DNS/TLS agai
 
 ## Removal checklist
 
-1. Confirm with the user: host, Cluster domain, whether data must be kept.
+1. Establish the authorized host, Cluster domain and whether data must be kept; ask only for unresolved inputs.
 2. Optional exports (above).
 3. `sudo bash install-cluster.sh --uninstall` (add `--purge-data` only if asked). Without a TTY
-   the prompt requires `-y`; pass it only after the user's explicit confirmation.
+   the prompt requires `-y`; pass it only for the already-authorized removal outcome.
 4. Remind the user to delete the DNS records and revoke/delete the certificate if no longer used.
 5. The CLIs remain in `/usr/local/bin`; remove them if asked.

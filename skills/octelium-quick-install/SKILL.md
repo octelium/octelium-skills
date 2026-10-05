@@ -38,6 +38,10 @@ controller of the installation: diagnose its state before resuming, don't hand-r
 
 ## Ground rules
 
+Preserve the user's authorized host and outcome across steps. Prepare the installation or
+recovery plan first, then ask only for missing inputs or unresolved destructive scope. Keep
+authorization for an existing-data reset separate from a request to install on a fresh host.
+
 1. **Confirm the target host.** The installer takes over the machine: it installs K3s, may add
    firewall rules (ufw/firewalld) and a NetworkManager file, symlinks `kubectl`, writes
    `/root/.kube/config`, labels/annotates the node. Run it only on the dedicated host the user
@@ -50,10 +54,11 @@ controller of the installation: diagnose its state before resuming, don't hand-r
    Failure during init, a missing marker after success, or a missing namespace can lead to init
    again and a datastore reset. Diagnose the existing Job and establish data/backup requirements
    first (references/recovery-and-removal.md).
-4. **Destructive options need an explicit, informed yes.** Don't add `--force`, `--reset-db`,
+4. **Destructive options need informed authorization.** Don't add `--force`, `--reset-db`,
    `--uninstall`, `--purge-data` or `-y/--yes` as a troubleshooting step. Explain what each one
    destroys (references/recovery-and-removal.md) and use it only when the user asks for that
-   outcome. `-y` answers the installer's own confirmation prompt; don't pass it for the user.
+   outcome. `-y` answers the installer's own confirmation prompt; use it only for an already
+   authorized operation, without asking for another yes to the same outcome.
 5. **A reinstall is a reset.** Any path that runs `octops init` again (after `--uninstall`, after
    `--reset-db`, when the K3s identity changed) re-creates the Octelium namespace and truncates
    the Cluster's resource table and Valkey data: Users, Services, Policies and Credentials are
@@ -65,8 +70,9 @@ controller of the installation: diagnose its state before resuming, don't hand-r
    (mode 0600) without printing it. Report the path only. Historical logs from unsuppressed runs
    can contain the token; filter login lines before reading them into the transcript.
 8. **Long-running, root-only.** It must run as root and takes minutes (up to ~20+ on small
-   hosts). From an agent, run it with a long timeout or in the background and follow filtered logs;
-   don't interrupt it mid-way.
+   hosts). Use the agent's long-running command facility or a background process with a retained
+   handle/PID and private log path. Follow filtered logs; don't interrupt it or start a second
+   installer while the first is running.
 
 ## Workflow
 

@@ -37,7 +37,8 @@ token while `root-init` is valid. Deleting the `root-init` Credential invalidate
 
 ## Uninstall
 
-Only on explicit request. Confirm the domain and kubecontext with the user first.
+Only on explicit request. Establish the domain, kubecontext and data-retention requirements
+from the user's authorized removal plan; ask only when one is unresolved.
 
 | Installation | Command | Removes | Leaves |
 | --- | --- | --- | --- |

@@ -7,13 +7,15 @@ Octelium release:
 
     python3 scripts/generate_cli_reference.py --bin-dir /path/to/release/bin --version v0.43.0
 
-Only the standard library is used. The binaries run with an isolated HOME and without any
-OCTELIUM_* environment so that no local state or Cluster is touched.
+Only the standard library is used. The binaries run with an isolated OCTELIUM_HOME and without
+inherited OCTELIUM_* settings. Only version and help commands are executed.
 """
 
 from __future__ import annotations
 
 import argparse
+import hashlib
+import json
 import os
 import re
 import shutil
@@ -21,6 +23,8 @@ import subprocess
 import sys
 import tempfile
 from pathlib import Path
+
+from maintenance import replace_files
 
 ROOT = Path(__file__).resolve().parent.parent
 
@@ -32,21 +36,44 @@ TARGETS = {
 }
 
 SKIP_SUBCOMMANDS = {"help", "completion"}
+GENERATOR_VERSION = "2"
+
+
+def run_command(binary: str, args: list[str], env: dict[str, str]) -> str:
+    label = " ".join([Path(binary).name, *args])
+    try:
+        proc = subprocess.run([binary, *args], capture_output=True, text=True, env=env,
+                              stdin=subprocess.DEVNULL, timeout=60, check=False)
+    except subprocess.TimeoutExpired as e:
+        raise ValueError(f"{label}: timed out after 60 seconds") from e
+    except OSError as e:
+        raise ValueError(f"{label}: could not execute: {e}") from e
+    if proc.returncode:
+        raise ValueError(f"{label}: exited with status {proc.returncode}")
+    outputs = []
+    for output in (proc.stdout, proc.stderr):
+        lines = output.splitlines()
+        lines = [ln for ln in lines if not re.match(r"^\d{4}-\d{2}-\d{2}T\S+\s+(DEBUG|INFO|WARN)\b", ln)]
+        outputs.append("\n".join(lines).strip("\n"))
+    return outputs[0] or outputs[1]
 
 
 def run_help(binary: str, path: list[str], env: dict[str, str]) -> str:
-    proc = subprocess.run(
-        [binary, *path, "--help"],
-        capture_output=True,
-        text=True,
-        env=env,
-        timeout=60,
-        check=False,
-    )
-    lines = (proc.stdout + proc.stderr).splitlines()
-    # Drop structured log lines some builds print on startup.
-    lines = [ln for ln in lines if not re.match(r"^\d{4}-\d{2}-\d{2}T\S+\s+(DEBUG|INFO|WARN)\b", ln)]
-    return "\n".join(lines).strip("\n")
+    text = run_command(binary, [*path, "--help"], env)
+    label = " ".join([Path(binary).name, *path])
+    if not re.search(r"^Usage:\s*\n\s+" + re.escape(label) + r"(?:\s|$)", text, re.M):
+        raise ValueError(f"{label} --help: missing or malformed Usage section")
+    return text
+
+
+def verify_version(binary: str, version: str, env: dict[str, str]) -> None:
+    try:
+        result = json.loads(run_command(binary, ["version", "-o", "json"], env))
+    except json.JSONDecodeError as e:
+        raise ValueError(f"{Path(binary).name} version: invalid JSON") from e
+    reported = result.get("releaseVersion") if isinstance(result, dict) else None
+    if not isinstance(reported, str) or reported.removeprefix("v") != version.removeprefix("v"):
+        raise ValueError(f"{Path(binary).name}: requested version {version!r} differs from reported {reported!r}")
 
 
 def subcommands(text: str) -> list[tuple[str, str]]:
@@ -88,6 +115,8 @@ def walk(binary: str, name: str, env: dict[str, str]) -> list[tuple[list[str], s
     result: list[tuple[list[str], str, str]] = []
 
     def visit(path: list[str], summary: str) -> None:
+        if len(path) > 10 or len(result) >= 1000:
+            raise ValueError(f"{name}: command traversal exceeded its limit")
         text = run_help(binary, path, env)
         result.append((path, summary, strip_noise(text, is_root=not path)))
         for sub, sub_summary in subcommands(text):
@@ -97,7 +126,7 @@ def walk(binary: str, name: str, env: dict[str, str]) -> list[tuple[list[str], s
     return result
 
 
-def render(name: str, version: str, commands: list[tuple[list[str], str, str]]) -> str:
+def render(name: str, version: str, commands: list[tuple[list[str], str, str]], digest: str) -> str:
     lines = [
         f"# `{name}` command reference",
         "",
@@ -106,6 +135,8 @@ def render(name: str, version: str, commands: list[tuple[list[str], str, str]]) 
         f"Snapshot of `{name} --help` for **{version}**. The installed CLI is authoritative: when this",
         f"file and `{name} <command> --help` disagree, trust the installed CLI. Global flags are",
         "shown once, under the root command.",
+        "",
+        f"Binary SHA-256: `{digest}`. Commands: {len(commands)}. Generator version: {GENERATOR_VERSION}.",
         "",
         "## Index",
         "",
@@ -125,26 +156,43 @@ def render(name: str, version: str, commands: list[tuple[list[str], str, str]]) 
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--bin-dir", help="directory holding octelium, octeliumctl and octops (default: PATH)")
-    ap.add_argument("--version", required=True, help="release label written into the files, e.g. v0.43.0")
+    ap.add_argument("--version", required=True, help="expected binary release version, e.g. v0.43.0")
     ap.add_argument("--only", choices=sorted(TARGETS), action="append", help="generate only these CLIs")
+    ap.add_argument("--check", action="store_true", help="report drift without changing files (exit 1)")
     args = ap.parse_args()
+    args.version = "v" + args.version.removeprefix("v")
 
-    with tempfile.TemporaryDirectory(prefix="octelium-help-") as home:
-        env = {k: v for k, v in os.environ.items() if not k.startswith("OCTELIUM_")}
-        env["HOME"] = home
-        env["XDG_CONFIG_HOME"] = os.path.join(home, ".config")
-        env["NO_COLOR"] = "1"
-
-        for name in args.only or sorted(TARGETS):
-            binary = os.path.join(args.bin_dir, name) if args.bin_dir else shutil.which(name)
-            if not binary or not os.access(binary, os.X_OK):
-                print(f"error: {name} binary not found", file=sys.stderr)
-                return 1
-            content = render(name, args.version, walk(binary, name, env))
-            for skill in TARGETS[name]:
-                dest = ROOT / "skills" / skill / "references" / f"cli-{name}.md"
-                dest.write_text(content, encoding="utf-8")
-                print(f"wrote {dest.relative_to(ROOT)} ({len(content.splitlines())} lines)")
+    contents: dict[Path, bytes] = {}
+    try:
+        with tempfile.TemporaryDirectory(prefix="octelium-help-") as home:
+            env = {k: v for k, v in os.environ.items() if not k.startswith("OCTELIUM_")}
+            env["OCTELIUM_HOME"] = home
+            env["NO_COLOR"] = "1"
+            for name in dict.fromkeys(args.only or sorted(TARGETS)):
+                binary = os.path.join(args.bin_dir, name) if args.bin_dir else shutil.which(name)
+                if not binary or not os.access(binary, os.X_OK):
+                    raise ValueError(f"{name} binary not found")
+                binary = str(Path(binary).absolute())
+                verify_version(binary, args.version, env)
+                digest = hashlib.sha256(Path(binary).read_bytes()).hexdigest()
+                commands = walk(binary, name, env)
+                if hashlib.sha256(Path(binary).read_bytes()).hexdigest() != digest:
+                    raise ValueError(f"{name}: binary changed during generation")
+                content = render(name, args.version, commands, digest).encode("utf-8")
+                for skill in TARGETS[name]:
+                    dest = ROOT / "skills" / skill / "references" / f"cli-{name}.md"
+                    contents[dest] = content
+        changed = [p for p, data in contents.items() if not p.exists() or p.read_bytes() != data]
+        if args.check:
+            for p in changed:
+                print(f"stale: {p.relative_to(ROOT)}")
+            return 1 if changed else 0
+        replace_files({p: contents[p] for p in changed})
+        for p in changed:
+            print(f"wrote {p.relative_to(ROOT)}")
+    except (OSError, ValueError) as e:
+        print(f"error: {e}", file=sys.stderr)
+        return 2
     return 0
 
 

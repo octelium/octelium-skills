@@ -28,20 +28,20 @@ and `TCP`/`UDP` only when no L7 mode fits.
 
 ## Upstreams
 
-```yaml
+```yaml fragment
 config:
   upstream:
     url: https://api.internal.example.com          # reachable from the Cluster
 ```
 
-```yaml
+```yaml fragment
 config:
   upstream:
     url: postgres://db.home.lan:5432               # resolved on the serving User's host
     user: homelab-connector                         # served by `octelium connect --serve <svc>`
 ```
 
-```yaml
+```yaml fragment
 config:
   upstream:
     loadbalance:
@@ -50,7 +50,7 @@ config:
         - url: https://backend2.example.com
 ```
 
-```yaml
+```yaml fragment
 config:
   upstream:
     container:                                      # managed container on data-plane nodes
@@ -134,7 +134,7 @@ spec:
 `VERIFY_FULL` verifies the certificate chain and the hostname in the upstream URL. Use the
 server's certified DNS name. For a private CA, add its PEM certificate under the same config:
 
-```yaml
+```yaml fragment
 tls:
   trustedCAs:
     - <PEM_CA_CERTIFICATE>

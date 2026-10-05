@@ -33,12 +33,16 @@ Octelium API. Its commands take the Cluster domain as the first argument.
 
 ## Ground rules
 
+Preserve the user's authorized target and outcome across steps. Prepare the concrete change
+and explain its effects before executing it. Ask only for missing inputs or an unresolved change
+in scope or destructive outcome; an already-authorized upgrade or rotation needs no second yes.
+
 1. **Pick the right kubeconfig and say which.** Quick-install hosts: run as root with
    `--kubeconfig /etc/rancher/k3s/k3s.yaml` (or `KUBECONFIG=...`). Elsewhere, pass
    `--kubeconfig`/`--kubecontext` explicitly and confirm `kubectl config current-context`.
 2. **No prompts without a TTY.** `octops upgrade`, `cert`, `install-package` and `uninstall` ask
-   for confirmation only in a terminal; from an agent they run immediately. Get an explicit yes
-   for the exact command first.
+   for confirmation only in a terminal; from an agent they run immediately. Check that the target
+   and operation are covered by the user's request before running them.
 3. **Read-only first.** Diagnose with `get`/`describe`/`logs` and `octops upgrade --check`.
    Don't delete pods, restart workloads or edit Octelium-managed Kubernetes objects to "try
    something"; Octelium reconciles its own objects, and manual edits are overwritten or break it.
@@ -65,10 +69,11 @@ Octelium API. Its commands take the Cluster domain as the first argument.
    | Lost admin access, initial token recovery, uninstall and cleanup | [references/recovery-and-uninstall.md](references/recovery-and-uninstall.md) |
    | Exact `octops` flags (snapshot) | [references/cli-octops.md](references/cli-octops.md) |
 
-3. **State the plan** (what changes, expected downtime, rollback/backup), get confirmation for
-   anything that changes the Cluster.
+3. **Prepare and state the plan** (target, changes, expected downtime, rollback/backup). Proceed
+   within the authorized outcome; ask before adding an unrequested destructive operation.
 4. **Execute and verify:** watch the relevant pods/jobs until healthy, then test from a client
-   (`octelium login`/`connect`, a Service request) or ask the user to.
+   with existing authorized access (a Service request), or ask the user to test. Reading tokens
+   or starting an interactive login isn't implied by a health check.
 
 ## Quick commands
 

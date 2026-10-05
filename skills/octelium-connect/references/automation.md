@@ -29,7 +29,7 @@ server is used by default.
 
 ## Kubernetes sidecar or connector Deployment
 
-```yaml
+```yaml fragment
 containers:
   - name: octelium
     image: ghcr.io/octelium/octelium
@@ -84,7 +84,7 @@ Docs: https://octelium.com/docs/octelium/latest/management/guide/service/devops/
 
 ## GitHub Actions
 
-```yaml
+```yaml fragment
 permissions:
   id-token: write                      # needed for the secretless assertion
 steps:

@@ -205,7 +205,7 @@ not independently verify phishing resistance or compliance with an external assu
 
 L7 examples (put them in `all.of` with the identity condition):
 
-```yaml
+```yaml fragment
 - match: ctx.request.http.path.startsWith("/api/") && ctx.request.http.method == "GET"
 - match: ctx.request.kubernetes.verb in ["get", "list", "watch"] && ctx.request.kubernetes.namespace == "staging"
 - match: ctx.request.postgres.connect.database == "analytics"
@@ -217,7 +217,7 @@ PostgreSQL checks connection authorization by default. Before using
 `ctx.request.postgres.query.query` or `.parse.query` to enforce statement rules, set this in
 the Service's active config (and each dynamic config that needs it):
 
-```yaml
+```yaml fragment
 config:
   postgres:
     authorization:

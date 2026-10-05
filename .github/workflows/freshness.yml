@@ -18,6 +18,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install schema validator
+        run: python -m pip install jsonschema
       - name: Compare schema snapshot with the published schemas
         run: scripts/sync_schemas.sh --check
 
@@ -32,9 +37,7 @@ jobs:
         run: |
           mkdir -p "$RUNNER_TEMP/bin"
           curl -fsSL https://octelium.com/install.sh | INSTALL_DIR="$RUNNER_TEMP/bin" USE_SUDO=false bash
-      - name: Regenerate CLI references
+      - name: Compare CLI references without modifying the checkout
         run: |
           VER="$("$RUNNER_TEMP/bin/octelium" version -o json 2>/dev/null | python3 -c 'import json,sys; print(json.load(sys.stdin)["releaseVersion"])')"
-          python scripts/generate_cli_reference.py --bin-dir "$RUNNER_TEMP/bin" --version "$VER"
-      - name: Fail on drift
-        run: git diff --exit-code -- skills/
+          python scripts/generate_cli_reference.py --bin-dir "$RUNNER_TEMP/bin" --version "v${VER#v}" --check

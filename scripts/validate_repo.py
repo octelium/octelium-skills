@@ -12,8 +12,8 @@ Checks:
   references/ is linked from SKILL.md;
 - plugin/marketplace manifests are valid JSON and agree on name and version;
 - generated CLI references and the bundled JSON Schemas are present;
-- every Octelium resource example (```yaml blocks and assets/templates/*.yaml) validates against the
-  bundled core/v1 JSON Schemas (placeholders like <NAME> are substituted first);
+- core/v1 resource examples validate against the bundled JSON Schemas; external resources,
+  fragments and Bootstrap examples have explicit classifications and limited parsing checks;
 - eval cases have a prompt and graders, and skill graders reference existing skills.
 
 Usage: uv run scripts/validate_repo.py   (or python3 with pyyaml and jsonschema installed)
@@ -26,14 +26,20 @@ import re
 import sys
 from pathlib import Path
 
+from generate_plugin_manifests import compatibility_manifests
+
 try:
     import yaml
 except ImportError:
-    sys.exit("error: PyYAML is required (uv run scripts/validate_repo.py, or pip install pyyaml jsonschema)")
+    print("error: PyYAML is required (uv run scripts/validate_repo.py, or pip install pyyaml jsonschema)", file=sys.stderr)
+    sys.exit(2)
 try:
     import jsonschema
 except ImportError:
-    jsonschema = None
+    print("error: jsonschema is required (uv run scripts/validate_repo.py, or pip install pyyaml jsonschema)", file=sys.stderr)
+    sys.exit(2)
+
+from sync_schemas import read_snapshot
 
 ROOT = Path(__file__).resolve().parent.parent
 SKILLS = ROOT / "skills"
@@ -65,7 +71,11 @@ def split_frontmatter(text: str) -> tuple[dict, str] | None:
     end = text.find("\n---\n", 4)
     if end < 0:
         return None
-    return yaml.safe_load(text[4:end]) or {}, text[end + 5:]
+    try:
+        fm = yaml.safe_load(text[4:end])
+    except yaml.YAMLError:
+        return None
+    return (fm, text[end + 5:]) if isinstance(fm, dict) else None
 
 
 def check_skill(skill_dir: Path) -> None:
@@ -127,53 +137,75 @@ def check_skill(skill_dir: Path) -> None:
                 err(f"{rel(r)}: not linked from SKILL.md (agents will never find it)")
 
 
-def check_manifests() -> None:
-    def load(p: str) -> dict | None:
-        path = ROOT / p
-        if not path.exists():
-            err(f"{p}: missing")
-            return None
-        try:
-            return json.loads(path.read_text())
-        except json.JSONDecodeError as e:
-            err(f"{p}: invalid JSON: {e}")
-            return None
+def load_object(path: str) -> dict | None:
+    try:
+        result = json.loads((ROOT / path).read_text(encoding="utf-8"))
+        if not isinstance(result, dict):
+            raise ValueError("expected a JSON object")
+        return result
+    except (OSError, ValueError) as e:
+        err(f"{path}: {e}")
+        return None
 
-    claude = load(".claude-plugin/plugin.json")
-    claude_mp = load(".claude-plugin/marketplace.json")
-    codex = load(".codex-plugin/plugin.json")
-    codex_mp = load(".agents/plugins/marketplace.json")
-    if not all([claude, claude_mp, codex, codex_mp]):
-        return
-    names = {claude.get("name"), codex.get("name"),
-             *(p.get("name") for p in claude_mp.get("plugins", [])),
-             *(p.get("name") for p in codex_mp.get("plugins", []))}
-    if len(names) != 1:
-        err(f"plugin names disagree across manifests: {sorted(map(str, names))}")
-    if claude.get("version") != codex.get("version"):
-        err(f"plugin versions disagree: claude {claude.get('version')} vs codex {codex.get('version')}")
-    for key in ("name", "owner", "plugins"):
-        if key not in claude_mp:
-            err(f".claude-plugin/marketplace.json: missing {key!r}")
-    skills_path = codex.get("skills")
-    if skills_path and not (ROOT / skills_path).is_dir():
-        err(f".codex-plugin/plugin.json: skills path {skills_path!r} not found")
-    for mp, entries in ((".claude-plugin/marketplace.json", claude_mp.get("plugins", [])),
-                        (".agents/plugins/marketplace.json", codex_mp.get("plugins", []))):
+
+def check_manifests() -> None:
+    portable = load_object("plugin.json")
+    schema = load_object("scripts/schemas/agent-plugins-1.0.0.schema.json")
+    if portable is not None and schema is not None:
+        try:
+            jsonschema.Draft202012Validator.check_schema(schema)
+            for e in jsonschema.Draft202012Validator(schema).iter_errors(portable):
+                err(f"plugin.json: {e.message}")
+        except jsonschema.SchemaError as e:
+            err(f"portable manifest schema: {e.message}")
+    expected = {}
+    if portable is not None:
+        try:
+            expected = compatibility_manifests(portable)
+        except ValueError as e:
+            err(str(e))
+    for path, wanted in expected.items():
+        actual = load_object(path)
+        if actual is not None and actual != wanted:
+            err(f"{path}: differs from plugin.json; run scripts/generate_plugin_manifests.py")
+    for mp in (".claude-plugin/marketplace.json", ".agents/plugins/marketplace.json"):
+        manifest = load_object(mp)
+        if manifest is None:
+            continue
+        if not isinstance(manifest.get("name"), str) or not manifest["name"]:
+            err(f"{mp}: name must be a nonempty string")
+        if mp.startswith(".claude") and not isinstance(manifest.get("owner"), dict):
+            err(f"{mp}: owner must be an object")
+        entries = manifest.get("plugins")
+        if not isinstance(entries, list) or not entries:
+            err(f"{mp}: plugins must be a nonempty array")
+            continue
         for e in entries:
+            if not isinstance(e, dict):
+                err(f"{mp}: plugin entry must be an object")
+                continue
+            if not isinstance(e.get("name"), str) or portable is None or e.get("name") != portable.get("name"):
+                err(f"{mp}: plugin name disagrees with plugin.json")
             src = e.get("source")
-            path = src if isinstance(src, str) else (src or {}).get("path")
-            if not path or not path.startswith("./") or ".." in path:
-                err(f"{mp}: plugin {e.get('name')!r} source path must start with ./ and stay inside the repo")
-            elif not (ROOT / path).is_dir():
-                err(f"{mp}: plugin {e.get('name')!r} source {path!r} not found")
+            path = src if isinstance(src, str) else src.get("path") if isinstance(src, dict) else None
+            if not isinstance(path, str) or not path.startswith("./") or ".." in Path(path).parts:
+                err(f"{mp}: source path must start with ./ and stay inside the repo")
+                continue
+            resolved = (ROOT / path).resolve()
+            if not resolved.is_relative_to(ROOT.resolve()) or not resolved.is_dir():
+                err(f"{mp}: source {path!r} not found inside the repo")
+    if not (ROOT / "skills").is_dir():
+        err("plugin.json: portable skills/ directory missing")
     skill_versions = set()
     for md in SKILLS.glob("*/SKILL.md"):
         parsed = split_frontmatter(md.read_text(encoding="utf-8"))
         if parsed:
-            skill_versions.add((parsed[0].get("metadata") or {}).get("version"))
-    if skill_versions != {claude.get("version")}:
-        warn(f"skill metadata versions {sorted(map(str, skill_versions))} differ from plugin version {claude.get('version')}")
+            meta = parsed[0].get("metadata")
+            version = meta.get("version") if isinstance(meta, dict) else None
+            skill_versions.add(version if isinstance(version, str) else None)
+    version = portable.get("version") if portable is not None else None
+    if isinstance(version, str) and skill_versions != {version}:
+        warn(f"skill metadata versions {sorted(map(str, skill_versions))} differ from plugin version {version}")
 
 
 def check_generated() -> None:
@@ -192,6 +224,10 @@ def check_generated() -> None:
                 err(f"{rel(p)}: missing the generated-file header")
     if not SCHEMAS.is_dir() or not list(SCHEMAS.glob("core.v1.*.schema.json")):
         err(f"{rel(SCHEMAS)}: schema snapshot missing; run scripts/sync_schemas.sh")
+    copies = [SKILLS / s / "references" / "cli-octops.md"
+              for s in ("octelium-kubernetes-install", "octelium-cluster-ops")]
+    if all(p.exists() for p in copies) and copies[0].read_bytes() != copies[1].read_bytes():
+        err("bundled octops references disagree; regenerate both copies together")
 
 
 PLACEHOLDER = re.compile(r"<([A-Za-z_][A-Za-z0-9_ -]*)>")
@@ -212,48 +248,68 @@ def fill_placeholders(text: str) -> str:
 
 
 def check_yaml_examples() -> None:
-    if jsonschema is None:
-        warn("jsonschema not installed: skipped validating YAML examples")
+    try:
+        schemas = {name.split(".")[2]: schema for name, schema in read_snapshot(SCHEMAS).items()}
+    except (OSError, ValueError) as e:
+        err(str(e))
         return
-    schemas: dict[str, dict] = {}
-    for p in SCHEMAS.glob("core.v1.*.schema.json"):
-        schemas[p.name.split(".")[2]] = json.loads(p.read_text())
-
-    sources: list[tuple[str, str]] = []
+    sources: list[tuple[str, str, str]] = []
     for f in sorted(SKILLS.rglob("*.md")):
         if f.name.startswith("cli-"):
             continue
-        for i, block in enumerate(re.findall(r"```yaml\n(.*?)```", f.read_text(encoding="utf-8"), re.S), start=1):
-            sources.append((f"{rel(f)} (yaml block {i})", block))
+        blocks = re.findall(r"```ya?ml([^\n]*)\n(.*?)```", f.read_text(encoding="utf-8"), re.S)
+        for i, (label, block) in enumerate(blocks, start=1):
+            sources.append((f"{rel(f)} (yaml block {i})", label.strip() or "octelium", block))
     for f in sorted(SKILLS.glob("*/assets/templates/*.yaml")):
-        sources.append((rel(f), f.read_text(encoding="utf-8")))
+        sources.append((rel(f), "octelium", f.read_text(encoding="utf-8")))
+    for f in sorted(SKILLS.glob("*/assets/bootstrap*.yaml")):
+        sources.append((rel(f), "bootstrap", f.read_text(encoding="utf-8")))
 
     checked = 0
-    for where, text in sources:
-        if "kind:" not in text:
+    for where, label, text in sources:
+        if label not in {"octelium", "kubernetes", "fragment", "bootstrap"}:
+            err(f"{where}: unknown YAML classification {label!r}")
             continue
         try:
-            docs = [d for d in yaml.safe_load_all(fill_placeholders(text)) if d]
+            docs = list(yaml.safe_load_all(fill_placeholders(text)))
         except yaml.YAMLError as e:
             err(f"{where}: invalid YAML: {e}")
             continue
         for d in docs:
+            if label == "fragment":
+                if d is None:
+                    err(f"{where}: empty YAML fragment")
+                continue
             if not isinstance(d, dict):
+                err(f"{where}: expected a YAML mapping")
+                continue
+            if label == "bootstrap":
+                if not isinstance(d.get("spec"), dict):
+                    err(f"{where}: expected a Bootstrap spec mapping")
                 continue
             kind = d.get("kind")
             api = d.get("apiVersion")
-            if kind not in schemas or (api and api != "core/v1"):
-                continue  # Kubernetes, cert-manager, ... examples
+            if label == "kubernetes":
+                if not isinstance(api, str) or not api or api == "core/v1" or not isinstance(kind, str) or not kind:
+                    err(f"{where}: external Kubernetes example needs apiVersion and kind")
+                continue
+            if not isinstance(kind, str) or kind not in schemas:
+                err(f"{where}: unrecognized Octelium kind {kind!r}; classify external resources or fragments explicitly")
+                continue
+            if api is not None and api != "core/v1":
+                err(f"{where}: unsupported Octelium apiVersion {api!r}")
+                continue
             v = jsonschema.Draft4Validator(schemas[kind])
             for e in v.iter_errors(d):
                 leaf = jsonschema.exceptions.best_match([e]) if e.context else e
                 path = "/".join(map(str, leaf.absolute_path)) or "(root)"
-                err(f"{where}: {kind} {d.get('metadata', {}).get('name')!r}: {path}: {leaf.message}")
+                err(f"{where}: {kind}: {path}: {leaf.message}")
             checked += 1
     if checked == 0:
         err("no Octelium YAML examples were validated; the extraction is broken")
     else:
         print(f"validated {checked} Octelium resource examples against the bundled schemas")
+    print("Bootstrap examples: YAML and spec shape checked; native field and semantic validation not performed")
 
 
 def check_evals() -> None:
@@ -272,6 +328,15 @@ def check_evals() -> None:
         parsed = split_frontmatter((case / "prompt.md").read_text(encoding="utf-8"))
         if parsed is None or not parsed[1].strip():
             err(f"{rel(case)}/prompt.md: needs frontmatter and a prompt body")
+        else:
+            for field, limit in (("runs", None), ("max_turns", 200), ("timeout_seconds", 3600)):
+                value = parsed[0].get(field)
+                if type(value) is not int or value < 1 or (limit is not None and value > limit):
+                    bound = f" from 1 to {limit}" if limit is not None else " greater than zero"
+                    err(f"{rel(case)}/prompt.md: {field} must be an integer{bound}")
+            tools = parsed[0].get("allowed_tools")
+            if not isinstance(tools, list) or not all(isinstance(t, str) for t in tools):
+                err(f"{rel(case)}/prompt.md: allowed_tools must be an array of tool names")
         for g in graders:
             gp = split_frontmatter(g.read_text(encoding="utf-8"))
             if gp is None or "type" not in gp[0]:
@@ -302,16 +367,22 @@ def check_secret_like_strings() -> None:
 
 
 def main() -> int:
-    check_secret_like_strings()
-    skill_dirs = sorted(p for p in SKILLS.iterdir() if p.is_dir())
+    errors.clear()
+    warnings.clear()
+    try:
+        skill_dirs = sorted(p for p in SKILLS.iterdir() if p.is_dir())
+    except OSError as e:
+        err(f"skills/: {e}")
+        skill_dirs = []
     if not skill_dirs:
         err("skills/: no skills found")
-    for d in skill_dirs:
-        check_skill(d)
-    check_manifests()
-    check_generated()
-    check_yaml_examples()
-    check_evals()
+    checks = [check_secret_like_strings, *(lambda d=d: check_skill(d) for d in skill_dirs),
+              check_manifests, check_generated, check_yaml_examples, check_evals]
+    for check in checks:
+        try:
+            check()
+        except (OSError, ValueError) as e:
+            err(f"repository check failed: {e}")
     for w in warnings:
         print(f"warning: {w}")
     for e in errors:

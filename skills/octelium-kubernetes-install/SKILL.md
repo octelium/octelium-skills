@@ -36,14 +36,18 @@ certificates) is the operator's responsibility and must be ready or planned firs
 
 ## Ground rules
 
+Preserve the user's authorized target and outcome across steps. Prepare the Bootstrap and
+installation plan before asking for any missing authorization. Ask only for unresolved inputs
+or destructive scope; a request to install on the specified empty cluster covers that install.
+
 1. **`octops init` is destructive for an existing installation.** It deletes and re-creates the
    `octelium` namespace, and Genesis truncates the `octelium_resources` table and flushes the
    Redis database it's given. Never run it against a Kubernetes cluster that already has an
    `octelium` namespace, or with datastores holding another Cluster's data, unless the user asks
    to wipe and re-create. It isn't a repair or upgrade tool.
 2. **No confirmation without a TTY.** `octops init` normally asks for confirmation; from an agent
-   shell it proceeds immediately. Get the user's explicit go-ahead for the exact command,
-   kubecontext and domain first.
+   shell it proceeds immediately. Check the command, kubecontext and domain against the user's
+   authorized installation; a wipe of existing data needs informed authorization of that reset.
 3. **Dedicated datastores.** Use a dedicated PostgreSQL database and a dedicated Redis/Valkey
    (or at least a dedicated DB index): Genesis flushes the Redis DB. Never point it at a shared
    cache.
@@ -79,7 +83,7 @@ certificates) is the operator's responsibility and must be ready or planned firs
 4. **Write the Bootstrap** (references/bootstrap.md; template `assets/bootstrap.example.yaml`).
 5. **Check datastore connectivity from inside the cluster** (a throwaway pod with `psql`/
    `valkey-cli` or `redis-cli` against the exact host/port/TLS settings) before init.
-6. **Install** (after explicit confirmation):
+6. **Install** the prepared, authorized configuration:
    ```bash
    (
      set -euo pipefail
@@ -92,8 +96,9 @@ certificates) is the operator's responsibility and must be ready or planned firs
    ```
    Report the protected token path only. On failure, retain the file privately for diagnosis;
    the command may have saved a token before a later failure. It blocks until the Cluster is
-   ready (often several minutes). Run with a long timeout or in
-   the background; follow `kubectl -n default logs -f job/octelium-genesis`.
+   ready (often several minutes). Use the agent's long-running command facility or a background
+   process with a retained handle/PID and private log path; follow the Genesis Job. A local
+   timeout doesn't cancel the Kubernetes Job: inspect it before retrying init.
 7. **Verify, DNS, TLS, first login** → references/install-and-verify.md: pods Ready in
    `octelium`, `octelium-ingress-dataplane` has an external address, DNS `A <DOMAIN>` +
    `CNAME *.<DOMAIN>`, certificate Secret `cert-cluster`, then the user logs in with the saved

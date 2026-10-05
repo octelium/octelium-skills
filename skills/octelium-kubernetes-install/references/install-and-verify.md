@@ -73,7 +73,7 @@ Per-Namespace certificates: Secret `cert-ns-<NAMESPACE>` with `*.<NAMESPACE>.<DO
 
 Recommended for production: cert-manager with a DNS-01 solver.
 
-```yaml
+```yaml kubernetes
 apiVersion: cert-manager.io/v1
 kind: Certificate
 metadata:

@@ -54,7 +54,8 @@ octops cert <DOMAIN> \
 ```
 
 `octops cert` updates the Kubernetes TLS Secret `cert-cluster` in namespace `octelium`, which the
-Cluster watches. Without a TTY it doesn't prompt; confirm with the user before running it. Verify:
+Cluster watches. Without a TTY it doesn't prompt; run it within the user's authorized
+installation or certificate-rotation plan. Ask only if the target or change is unresolved. Verify:
 `curl -sI https://<DOMAIN>` succeeds without `-k`.
 
 ## 3. First login and admin

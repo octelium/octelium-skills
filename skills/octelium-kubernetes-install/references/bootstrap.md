@@ -9,7 +9,7 @@ comes from the `octelium.api.cluster.bootstrap.v1.Config` message (v0.43.0).
 
 ## Fields
 
-```yaml
+```yaml bootstrap
 spec:
   primaryStorage:
     postgresql:                  # required
@@ -67,7 +67,7 @@ neither `password` nor `passwordFromSecret` is set (or `password` is empty); a p
 
 ## Minimal production example (secrets by reference)
 
-```yaml
+```yaml bootstrap
 spec:
   primaryStorage:
     postgresql:

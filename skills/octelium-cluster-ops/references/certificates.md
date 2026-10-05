@@ -29,7 +29,7 @@ Use the full chain (leaf + intermediates). Aliases: `octops cert`, `crt`, `certi
 Preferred: cert-manager in the same Kubernetes cluster with an ACME `ClusterIssuer` using a DNS-01
 solver for the user's DNS provider (Cloudflare, Route 53, Cloud DNS, Azure DNS, ...), and:
 
-```yaml
+```yaml kubernetes
 apiVersion: cert-manager.io/v1
 kind: Certificate
 metadata:
