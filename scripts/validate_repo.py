@@ -12,8 +12,9 @@ Checks:
   references/ is linked from SKILL.md;
 - plugin/marketplace manifests are valid JSON and agree on name and version;
 - generated CLI references and the bundled JSON Schemas are present;
-- core/v1 resource examples validate against the bundled JSON Schemas; external resources,
-  fragments and Bootstrap examples have explicit classifications and limited parsing checks;
+- core/v1 and cordium/v1 resource examples validate against the bundled JSON Schemas; external
+  resources, fragments and Bootstrap examples have explicit classifications and limited parsing
+  checks;
 - eval cases have a prompt and graders, and skill graders reference existing skills.
 
 Usage: uv run scripts/validate_repo.py   (or python3 with pyyaml and jsonschema installed)
@@ -44,6 +45,7 @@ from sync_schemas import read_snapshot
 ROOT = Path(__file__).resolve().parent.parent
 SKILLS = ROOT / "skills"
 SCHEMAS = SKILLS / "octelium-management" / "assets" / "schemas"
+CORDIUM_SCHEMAS = SKILLS / "cordium" / "assets" / "schemas"
 NAME_RE = re.compile(r"^[a-z0-9]+(-[a-z0-9]+)*$")
 LINK_RE = re.compile(r"\[[^\]]*\]\(([^)\s]+)\)")
 MAX_SKILL_LINES = 500
@@ -214,6 +216,7 @@ def check_generated() -> None:
         "octelium-management": ["cli-octeliumctl.md"],
         "octelium-kubernetes-install": ["cli-octops.md"],
         "octelium-cluster-ops": ["cli-octops.md"],
+        "cordium": ["cli-cordium.md"],
     }
     for skill, files in expected.items():
         for f in files:
@@ -224,6 +227,8 @@ def check_generated() -> None:
                 err(f"{rel(p)}: missing the generated-file header")
     if not SCHEMAS.is_dir() or not list(SCHEMAS.glob("core.v1.*.schema.json")):
         err(f"{rel(SCHEMAS)}: schema snapshot missing; run scripts/sync_schemas.sh")
+    if not CORDIUM_SCHEMAS.is_dir() or not list(CORDIUM_SCHEMAS.glob("cordium.v1.*.schema.json")):
+        err(f"{rel(CORDIUM_SCHEMAS)}: schema snapshot missing; run scripts/sync_schemas.sh --set cordium")
     copies = [SKILLS / s / "references" / "cli-octops.md"
               for s in ("octelium-kubernetes-install", "octelium-cluster-ops")]
     if all(p.exists() for p in copies) and copies[0].read_bytes() != copies[1].read_bytes():
@@ -253,6 +258,13 @@ def check_yaml_examples() -> None:
     except (OSError, ValueError) as e:
         err(str(e))
         return
+    cordium_schemas: dict[str, dict] = {}
+    if CORDIUM_SCHEMAS.is_dir():
+        try:
+            cordium_schemas = {name.split(".")[2]: schema
+                               for name, schema in read_snapshot(CORDIUM_SCHEMAS, "cordium.v1").items()}
+        except (OSError, ValueError) as e:
+            err(str(e))
     sources: list[tuple[str, str, str]] = []
     for f in sorted(SKILLS.rglob("*.md")):
         if f.name.startswith("cli-"):
@@ -261,13 +273,15 @@ def check_yaml_examples() -> None:
         for i, (label, block) in enumerate(blocks, start=1):
             sources.append((f"{rel(f)} (yaml block {i})", label.strip() or "octelium", block))
     for f in sorted(SKILLS.glob("*/assets/templates/*.yaml")):
-        sources.append((rel(f), "octelium", f.read_text(encoding="utf-8")))
+        label = "cordium" if f.parts[-4] == "cordium" else "octelium"
+        sources.append((rel(f), label, f.read_text(encoding="utf-8")))
     for f in sorted(SKILLS.glob("*/assets/bootstrap*.yaml")):
         sources.append((rel(f), "bootstrap", f.read_text(encoding="utf-8")))
 
     checked = 0
+    checked_cordium = 0
     for where, label, text in sources:
-        if label not in {"octelium", "kubernetes", "fragment", "bootstrap"}:
+        if label not in {"octelium", "cordium", "kubernetes", "fragment", "bootstrap"}:
             err(f"{where}: unknown YAML classification {label!r}")
             continue
         try:
@@ -293,6 +307,19 @@ def check_yaml_examples() -> None:
                 if not isinstance(api, str) or not api or api == "core/v1" or not isinstance(kind, str) or not kind:
                     err(f"{where}: external Kubernetes example needs apiVersion and kind")
                 continue
+            if label == "cordium":
+                if not isinstance(kind, str) or kind not in cordium_schemas:
+                    err(f"{where}: unrecognized Cordium kind {kind!r}")
+                    continue
+                if api is not None and api != "cordium/v1":
+                    err(f"{where}: unsupported Cordium apiVersion {api!r}")
+                    continue
+                for e in jsonschema.Draft4Validator(cordium_schemas[kind]).iter_errors(d):
+                    leaf = jsonschema.exceptions.best_match([e]) if e.context else e
+                    path = "/".join(map(str, leaf.absolute_path)) or "(root)"
+                    err(f"{where}: {kind}: {path}: {leaf.message}")
+                checked_cordium += 1
+                continue
             if not isinstance(kind, str) or kind not in schemas:
                 err(f"{where}: unrecognized Octelium kind {kind!r}; classify external resources or fragments explicitly")
                 continue
@@ -309,6 +336,11 @@ def check_yaml_examples() -> None:
         err("no Octelium YAML examples were validated; the extraction is broken")
     else:
         print(f"validated {checked} Octelium resource examples against the bundled schemas")
+    if (SKILLS / "cordium").is_dir():
+        if checked_cordium == 0:
+            err("no Cordium YAML examples were validated; the extraction is broken")
+        else:
+            print(f"validated {checked_cordium} Cordium resource examples against the bundled schemas")
     print("Bootstrap examples: YAML and spec shape checked; native field and semantic validation not performed")
 
 
@@ -342,7 +374,7 @@ def check_evals() -> None:
             if gp is None or "type" not in gp[0]:
                 err(f"{rel(g)}: grader needs frontmatter with `type`")
                 continue
-            for name in re.findall(r"octelium-[a-z-]+", str(gp[0].get("input_match", ""))):
+            for name in re.findall(r"octelium-[a-z-]+|cordium(?:-[a-z-]+)?", str(gp[0].get("input_match", ""))):
                 if name not in skill_names:
                     err(f"{rel(g)}: references unknown skill {name!r}")
 

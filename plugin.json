@@ -2,7 +2,7 @@
   "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
   "name": "octelium",
   "version": "0.1.0",
-  "description": "Official Octelium skills: install Clusters (single-node quick installer or production Kubernetes), operate them with octops, manage resources and Policies with octeliumctl, and connect to Services with the octelium client.",
+  "description": "Official Octelium skills: install Clusters (single-node quick installer or production Kubernetes), operate them with octops, manage resources and Policies with octeliumctl, connect to Services with the octelium client, and run Cordium sandboxes with the cordium CLI.",
   "author": {
     "name": "Octelium Labs, LLC",
     "url": "https://octelium.com"
@@ -18,14 +18,16 @@
     "wireguard",
     "kubernetes",
     "access-control",
-    "policy"
+    "policy",
+    "cordium",
+    "sandbox"
   ],
   "extensions": {
     "com.openai": {
       "interface": {
         "displayName": "Octelium",
         "shortDescription": "Install, operate, manage and connect to Octelium Clusters",
-        "longDescription": "Workflow skills for the Octelium zero trust secure access platform: the single-node quick installer, production installation on Kubernetes with octops, Day-2 Cluster operations (upgrades, TLS certificates, diagnostics), declarative resource and Policy management with octeliumctl, and client-side access with the octelium CLI.",
+        "longDescription": "Workflow skills for the Octelium zero trust secure access platform: the single-node quick installer, production installation on Kubernetes with octops, Day-2 Cluster operations (upgrades, TLS certificates, diagnostics), declarative resource and Policy management with octeliumctl, client-side access with the octelium CLI, and Cordium sandboxes (Workspaces for developers, AI agents and CI) with the cordium CLI.",
         "developerName": "Octelium Labs, LLC",
         "category": "Developer Tools",
         "websiteURL": "https://octelium.com",

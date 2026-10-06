@@ -99,6 +99,53 @@ sys.exit(subprocess.call([sys.executable, *sys.argv[2:]]))
         self.assertEqual(stat.S_IMODE(path.stat().st_mode), 0o600)
         self.assertIn("kind: Config", path.read_text())
 
+    def cordium_ci_commands(self) -> None:
+        self.fake_command("cordium", '''
+import json
+import os
+import sys
+from pathlib import Path
+
+args = sys.argv[1:]
+directory = Path(os.environ["OCTELIUM_TEST_DIR"])
+with open(directory / "cordium-calls", "a") as stream:
+    stream.write(" ".join(args) + "\\n")
+if args[:2] == ["create", "ws"]:
+    assert "--ephemeral" in args and args[-2:] == ["-o", "json"]
+    print(json.dumps({"metadata": {"name": "abc"}}))
+elif args[:2] == ["get", "ws"]:
+    print(json.dumps({"status": {"state": os.environ["CORDIUM_TEST_STATE"],
+                                 "failure": {"message": "synthetic failure"}}}))
+elif args[0] == "exec":
+    assert "--no-stdin" in args
+    sys.exit(int(os.environ["CORDIUM_TEST_EXEC_CODE"]))
+''')
+        self.fake_command("jq", '''
+import json
+import sys
+
+args = sys.argv[1:]
+value = json.load(sys.stdin)
+for key in args[-1].strip(".").split("."):
+    value = value[key]
+print(value if "-r" in args else json.dumps(value))
+''')
+
+    def test_cordium_ci_recipe_propagates_the_result_and_cleans_up(self) -> None:
+        self.cordium_ci_commands()
+        recipe = self.recipe("cordium", "workspaces.md", 1)
+        for state, code, expected in (("RUNNING", "3", 3), ("RUNNING", "0", 0), ("STOPPED", "0", 1)):
+            with self.subTest(state=state, code=code):
+                calls = self.directory / "cordium-calls"
+                calls.unlink(missing_ok=True)
+                self.env.update({"CORDIUM_TEST_STATE": state, "CORDIUM_TEST_EXEC_CODE": code})
+                result = self.run_recipe(recipe)
+                self.assertEqual(result.returncode, expected, result.stderr)
+                commands = calls.read_text().splitlines()
+                self.assertEqual(commands[-1], "delete ws abc")
+                self.assertEqual(any(c.startswith("exec abc") for c in commands), state == "RUNNING")
+                self.assertEqual("synthetic failure" in result.stdout, state == "STOPPED")
+
     def recovery_recipe(self) -> str:
         text = self.recipe("octelium-cluster-ops", "recovery-and-uninstall.md", 0)
         return text.replace("/secure/path/", str(self.directory) + "/").replace("<DOMAIN>", "example.com")

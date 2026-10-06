@@ -1,8 +1,8 @@
 name: freshness
 
-# Detects drift between the bundled snapshots and the latest Octelium release:
-# - JSON Schemas published at https://octelium.com/schemas/octelium/latest/
-# - `--help` output of the latest octelium, octeliumctl and octops releases
+# Detects drift between the bundled snapshots and the latest Octelium and Cordium releases:
+# - JSON Schemas published at https://octelium.com/schemas/octelium/latest/ and /schemas/cordium/latest/
+# - `--help` output of the latest octelium, octeliumctl, octops and cordium releases
 # A failure means a maintainer should regenerate, review the diff, and update the skills.
 
 on:
@@ -41,3 +41,19 @@ jobs:
         run: |
           VER="$("$RUNNER_TEMP/bin/octelium" version -o json 2>/dev/null | python3 -c 'import json,sys; print(json.load(sys.stdin)["releaseVersion"])')"
           python scripts/generate_cli_reference.py --bin-dir "$RUNNER_TEMP/bin" --version "v${VER#v}" --check
+
+  cordium-cli-reference:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install the latest Cordium CLI
+        run: |
+          mkdir -p "$RUNNER_TEMP/bin"
+          curl -fsSL https://octelium.com/install-cordium.sh | INSTALL_DIR="$RUNNER_TEMP/bin" bash
+      - name: Compare the Cordium CLI reference without modifying the checkout
+        run: |
+          VER="$("$RUNNER_TEMP/bin/cordium" version -o json 2>/dev/null | python3 -c 'import json,sys; print(json.load(sys.stdin)["releaseVersion"])')"
+          python scripts/generate_cli_reference.py --bin-dir "$RUNNER_TEMP/bin" --version "v${VER#v}" --only cordium --check

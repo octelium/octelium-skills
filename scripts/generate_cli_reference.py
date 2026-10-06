@@ -7,6 +7,10 @@ Octelium release:
 
     python3 scripts/generate_cli_reference.py --bin-dir /path/to/release/bin --version v0.43.0
 
+The cordium CLI is versioned separately and is generated only when requested:
+
+    python3 scripts/generate_cli_reference.py --bin-dir /path/to/bin --version v0.15.0 --only cordium
+
 Only the standard library is used. The binaries run with an isolated OCTELIUM_HOME and without
 inherited OCTELIUM_* settings. Only version and help commands are executed.
 """
@@ -33,7 +37,10 @@ TARGETS = {
     "octelium": ["octelium-connect"],
     "octeliumctl": ["octelium-management"],
     "octops": ["octelium-kubernetes-install", "octelium-cluster-ops"],
+    "cordium": ["cordium"],
 }
+
+SEPARATELY_VERSIONED = {"cordium"}
 
 SKIP_SUBCOMMANDS = {"help", "completion"}
 GENERATOR_VERSION = "2"
@@ -155,9 +162,10 @@ def render(name: str, version: str, commands: list[tuple[list[str], str, str]], 
 
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--bin-dir", help="directory holding octelium, octeliumctl and octops (default: PATH)")
+    ap.add_argument("--bin-dir", help="directory holding the CLI binaries (default: PATH)")
     ap.add_argument("--version", required=True, help="expected binary release version, e.g. v0.43.0")
-    ap.add_argument("--only", choices=sorted(TARGETS), action="append", help="generate only these CLIs")
+    ap.add_argument("--only", choices=sorted(TARGETS), action="append",
+                    help="generate only these CLIs (default: the Octelium CLIs; cordium only when requested)")
     ap.add_argument("--check", action="store_true", help="report drift without changing files (exit 1)")
     args = ap.parse_args()
     args.version = "v" + args.version.removeprefix("v")
@@ -168,7 +176,8 @@ def main() -> int:
             env = {k: v for k, v in os.environ.items() if not k.startswith("OCTELIUM_")}
             env["OCTELIUM_HOME"] = home
             env["NO_COLOR"] = "1"
-            for name in dict.fromkeys(args.only or sorted(TARGETS)):
+            default = [name for name in sorted(TARGETS) if name not in SEPARATELY_VERSIONED]
+            for name in dict.fromkeys(args.only or default):
                 binary = os.path.join(args.bin_dir, name) if args.bin_dir else shutil.which(name)
                 if not binary or not os.access(binary, os.X_OK):
                     raise ValueError(f"{name} binary not found")

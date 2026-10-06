@@ -9,7 +9,7 @@
     {
       "name": "octelium",
       "source": "./",
-      "description": "Install, operate, manage and connect to Octelium zero trust Clusters.",
+      "description": "Install, operate, manage and connect to Octelium zero trust Clusters, and run Cordium sandboxes.",
       "category": "infrastructure",
       "tags": ["zero-trust", "ztna", "security", "kubernetes"]
     }

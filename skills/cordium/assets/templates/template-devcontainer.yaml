@@ -1,0 +1,38 @@
+# Team development Template built from the repository's devcontainer, with OAuth2 git access.
+# Before using: create the GitProvider (references/spaces-and-templates.md). Replace every
+# <PLACEHOLDER>; <OWNER> is the Space owner's User name, or `cordium` for an organization Space.
+#   cordium create template <TEMPLATE>.<SPACE> -f template-devcontainer.yaml
+#   cordium build <TEMPLATE>.<SPACE>          # optional pre-build (needs VolumeSnapshot support)
+kind: Template
+spec:
+  gitProvider: <GIT_PROVIDER>.<SPACE>.<OWNER>
+  repository:
+    url: https://github.com/<ORG>/<REPO>
+    cloneOptions:
+      branch: main
+  image:
+    repository:
+      devcontainer:
+        dirPath: .devcontainer
+  runtime:
+    envVars:
+      - key: LOG_LEVEL
+        value: debug
+    tasks:
+      - name: dependencies
+        type: ON_CREATE
+        workingDir: /workspace/repo
+        run: <INSTALL_COMMAND>
+        onFailure: ON_FAILURE_ABORT
+      - name: dev-server
+        type: POST_START
+        workingDir: /workspace/repo
+        run: <DEV_SERVER_COMMAND>
+        isBackground: true
+  limit:
+    cpu:
+      millicores: 4000
+    memory:
+      megabytes: 8192
+    storage:
+      megabytes: 30000

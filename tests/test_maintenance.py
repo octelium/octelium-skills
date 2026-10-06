@@ -98,6 +98,18 @@ class MaintenanceTests(MaintenanceFixture):
         self.assertEqual(self.generate("--only", "octops", "--check")[0], 1)
         self.assertEqual(copies[0].read_text(), "old snapshot")
 
+    def test_cordium_reference_is_generated_only_on_request(self) -> None:
+        for name in ("octelium", "octeliumctl", "octops"):
+            self.fake_cli(name)
+        self.fake_cli("cordium", "0.15.0")
+        result, output = self.generate()
+        self.assertEqual(result, 0, output)
+        self.assertFalse((self.directory / "skills" / "cordium").exists())
+        result, output = self.generate("--only", "cordium", "--version", "v0.15.0")
+        self.assertEqual(result, 0, output)
+        reference = self.directory / "skills" / "cordium" / "references" / "cli-cordium.md"
+        self.assertIn("from cordium v0.15.0", reference.read_text())
+
     def test_failed_cli_traversal_does_not_write_any_requested_output(self) -> None:
         self.fake_cli("octelium")
         self.fake_cli("octeliumctl", failure="child")
@@ -164,6 +176,54 @@ class MaintenanceTests(MaintenanceFixture):
         self.assertEqual(list(dest.glob("*")), [old])
         self.assertEqual(schemas.sync(source, dest, "unused", False), 0)
         self.assertEqual(set(schemas.read_snapshot(dest)), {"core.v1.Service.schema.json", "core.v1.FutureKind.schema.json"})
+
+    def test_schema_sync_supports_the_cordium_set(self) -> None:
+        dest, source = self.directory / "dest", self.directory / "source"
+        self.write_schema(dest, "Service")
+        schema = json.dumps({"$schema": schemas.DRAFT, "type": "object"})
+        for directory in (dest, source):
+            directory.mkdir(parents=True, exist_ok=True)
+            (directory / "cordium.v1.Workspace.schema.json").write_text(schema)
+        self.assertEqual(set(schemas.read_snapshot(dest)), {"core.v1.Service.schema.json"})
+        self.assertEqual(set(schemas.read_snapshot(dest, "cordium.v1")), {"cordium.v1.Workspace.schema.json"})
+        self.assertEqual(schemas.sync(source, dest, "unused", True, "cordium.v1"), 0)
+        (source / "cordium.v1.Template.schema.json").write_text(schema)
+        self.assertEqual(schemas.sync(source, dest, "unused", True, "cordium.v1"), 1)
+        self.assertEqual(schemas.sync(source, dest, "unused", False, "cordium.v1"), 0)
+        self.assertEqual(set(schemas.read_snapshot(dest, "cordium.v1")),
+                         {"cordium.v1.Workspace.schema.json", "cordium.v1.Template.schema.json"})
+        self.assertEqual(set(schemas.read_snapshot(dest)), {"core.v1.Service.schema.json"})
+
+    def test_remote_check_covers_each_selected_set(self) -> None:
+        octelium, cordium, remote = self.directory / "octelium", self.directory / "cordium", self.directory / "remote"
+        self.write_schema(octelium, "Service")
+        self.write_schema(remote, "Service")
+        cordium.mkdir()
+        (cordium / "cordium.v1.Workspace.schema.json").write_text(json.dumps({"$schema": schemas.DRAFT}))
+        (remote / "cordium.v1.Workspace.schema.json").write_text(json.dumps({"$schema": schemas.DRAFT, "type": "object"}))
+        urls = []
+
+        def fake_curl(command, **kwargs):
+            urls.append(command[-1])
+            shutil.copyfile(remote / command[-1].rsplit("/", 1)[1], command[command.index("-o") + 1])
+            return subprocess.CompletedProcess(command, 0)
+
+        for args, expected in ((["--check"], 1), (["--check", "--set", "octelium"], 0)):
+            with self.subTest(args=args):
+                urls.clear()
+                with mock.patch.object(schemas, "DEST", octelium), mock.patch.object(schemas, "CORDIUM_DEST", cordium), \
+                     mock.patch.object(sys, "argv", ["sync", *args]), \
+                     mock.patch.object(schemas.subprocess, "run", side_effect=fake_curl), \
+                     contextlib.redirect_stdout(io.StringIO()) as output:
+                    self.assertEqual(schemas.main(), expected)
+                self.assertEqual(any("/schemas/cordium/latest/" in url for url in urls), expected == 1)
+                self.assertEqual("stale: cordium.v1.Workspace.schema.json" in output.getvalue(), expected == 1)
+
+    def test_schema_sync_from_source_takes_one_set(self) -> None:
+        with mock.patch.object(sys, "argv", ["sync", "--from", str(self.directory), "--set", "octelium", "--set", "cordium"]), \
+             contextlib.redirect_stderr(io.StringIO()) as output:
+            self.assertEqual(schemas.main(), 2)
+        self.assertIn("--from takes a single --set", output.getvalue())
 
     def test_invalid_or_incomplete_schema_sources_preserve_snapshot(self) -> None:
         dest, source = self.directory / "dest", self.directory / "source"
@@ -271,6 +331,33 @@ class RepositoryValidationTests(MaintenanceFixture):
         self.assertEqual(len(validator.errors), 1)
         self.assertIn("bootstrap.example.yaml", validator.errors[0])
         bootstrap.write_text("spec: {}\n")
+        validator.errors.clear()
+        validator.check_yaml_examples()
+        self.assertEqual(validator.errors, [])
+
+    def test_cordium_examples_validate_against_the_cordium_schemas(self) -> None:
+        cordium = self.directory / "cordium-schemas"
+        cordium.mkdir()
+        (cordium / "cordium.v1.Workspace.schema.json").write_text(json.dumps({
+            "$schema": schemas.DRAFT, "type": "object",
+            "properties": {"kind": {"type": "string"}, "apiVersion": {"type": "string"},
+                           "spec": {"type": "object", "additionalProperties": False}}}))
+        path = self.directory / "skills/test/references/example.md"
+        mock.patch.object(validator, "CORDIUM_SCHEMAS", cordium).start()
+        for example, expected in (("kind: Workspace\nspec: {}", 0), ("kind: Workspace\nspec: {bogus: 1}", 1),
+                                  ("kind: Template\nspec: {}", 1), ("apiVersion: core/v1\nkind: Workspace", 1)):
+            with self.subTest(example=example):
+                validator.errors.clear()
+                path.write_text(f"```yaml\nkind: Service\n```\n```yaml cordium\n{example}\n```\n")
+                validator.check_yaml_examples()
+                self.assertEqual(len(validator.errors), expected, validator.errors)
+        templates = self.directory / "skills/cordium/assets/templates"
+        templates.mkdir(parents=True)
+        path.write_text("```yaml\nkind: Service\n```\n")
+        validator.errors.clear()
+        validator.check_yaml_examples()
+        self.assertTrue(any("no Cordium YAML examples" in e for e in validator.errors), validator.errors)
+        (templates / "workspace.yaml").write_text("kind: Workspace\nspec: {}\n")
         validator.errors.clear()
         validator.check_yaml_examples()
         self.assertEqual(validator.errors, [])

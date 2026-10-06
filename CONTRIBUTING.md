@@ -35,9 +35,13 @@
 4. Read the release notes and diff the docs; update references, ground rules, and version notes.
    Re-check the behaviors listed in the README ("Verified against the implementation").
 5. If the quick installer changed, update `octelium-quick-install` (options, errors, state files).
-6. Bump `metadata.verified-against` in affected skills, and the bundle version in
-   root `plugin.json` and every skill's `metadata.version`. Run
-   `python3 scripts/generate_plugin_manifests.py` to update the compatibility manifests.
+   For a Cordium release, install it with
+   `curl -fsSL https://octelium.com/install-cordium.sh | VERSION=vX.Y.Z INSTALL_DIR=/tmp/oct bash`,
+   run `python3 scripts/generate_cli_reference.py --bin-dir /tmp/oct --version vX.Y.Z --only cordium`
+   and `scripts/sync_schemas.sh --set cordium`, then re-check the `cordium` skill's version notes.
+6. Bump `metadata.verified-against` (and `metadata.source-checked` where present) in affected
+   skills, and the bundle version in root `plugin.json` and every skill's `metadata.version`.
+   Run `python3 scripts/generate_plugin_manifests.py` to update the compatibility manifests.
 7. `uv run scripts/validate_repo.py`, `python3 -m unittest discover -s tests`,
    `claude plugin validate --strict .`, and run the evals
    with the private, bounded command below, comparing with the previous run.
@@ -94,25 +98,30 @@ Skills reference validator runs on 3.12. Weekly freshness checks use the network
 | YAML fence | CI check |
 | --- | --- |
 | `yaml` or `yaml octelium` | Complete core/v1 resource; known kind/API and bundled Draft 4 schema |
+| `yaml cordium` | Complete cordium/v1 resource with `kind`; bundled Cordium Draft 4 schema |
 | `yaml kubernetes` | Explicit external resource; YAML mapping with API/kind, without Kubernetes schema validation |
 | `yaml fragment` | Partial configuration or list; YAML syntax only |
 | `yaml bootstrap` | Bootstrap YAML and spec mapping only |
 
-CI also parses `assets/bootstrap*.yaml`, including `bootstrap.example.yaml`. It doesn't validate
-the Bootstrap's protobuf fields or native semantics: no safe offline native validator has been
-verified. Don't run destructive `octops init` merely to validate an asset. Resource schemas are
-checked for their declared draft, schema validity and resolvable local references. Unknown kinds
-and other APIs in an Octelium example are errors, not silently skipped.
+`assets/templates/*.yaml` are validated as `octelium`, except in the `cordium` skill, where they
+are validated as `cordium`. CI also parses `assets/bootstrap*.yaml`, including
+`bootstrap.example.yaml`. It doesn't validate the Bootstrap's protobuf fields or native
+semantics: no safe offline native validator has been verified. Don't run destructive
+`octops init` merely to validate an asset. Resource schemas are checked for their declared draft,
+schema validity and resolvable local references. Unknown kinds and other APIs in an Octelium or
+Cordium example are errors, not silently skipped.
 
 CLI generation verifies the binary's reported version and every help command before updating
 any requested output. New snapshots record the executable hash, command count and generator
 version; both octops copies must agree. `--check` reports drift without writing references.
 
-Schema sync validates and stages the complete set. Local `--from` discovers new kinds and
-rejects a source missing bundled kinds; review removals manually. Remote sync checks the
-currently bundled kinds, because no authoritative remote inventory has been verified. Comparison
-is semantic, avoiding formatting-only drift. Exit 1 means drift in `--check`; exit 2 means an
-unavailable source or invalid input, not proven drift.
+Schema sync validates and stages the complete set: core/v1 for `octelium-management` and
+cordium/v1 for `cordium` (`--set` selects one; remote sync defaults to both, `--from` to
+`octelium`). Local `--from` discovers new kinds and rejects a source missing bundled kinds;
+review removals manually. Remote sync checks the currently bundled kinds, because no
+authoritative remote inventory has been verified. Comparison is semantic, avoiding
+formatting-only drift. Exit 1 means drift in `--check`; exit 2 means an unavailable source or
+invalid input, not proven drift.
 
 Updates restore previous files/schemas after a checked replacement failure. Directory replacement
 uses a backup and two renames, not a crash-atomic filesystem transaction. If forcibly killed or

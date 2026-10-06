@@ -2,7 +2,7 @@
   "name": "octelium",
   "displayName": "Octelium",
   "version": "0.1.0",
-  "description": "Official Octelium skills: install Clusters (single-node quick installer or production Kubernetes), operate them with octops, manage resources and Policies with octeliumctl, and connect to Services with the octelium client.",
+  "description": "Official Octelium skills: install Clusters (single-node quick installer or production Kubernetes), operate them with octops, manage resources and Policies with octeliumctl, connect to Services with the octelium client, and run Cordium sandboxes with the cordium CLI.",
   "author": {
     "name": "Octelium Labs, LLC",
     "url": "https://octelium.com"
@@ -18,6 +18,8 @@
     "wireguard",
     "kubernetes",
     "access-control",
-    "policy"
+    "policy",
+    "cordium",
+    "sandbox"
   ]
 }

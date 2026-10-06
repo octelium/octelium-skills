@@ -1,0 +1,54 @@
+# Cordium ClusterConfig with explicit ownership rules, quotas, limits and timeouts.
+# `cordium man apply` replaces the ENTIRE spec: merge these settings into the current one
+# (`cordium man get cc -o yaml`) instead of applying this file over it. Replace every <PLACEHOLDER>.
+kind: ClusterConfig
+metadata:
+  name: default
+spec:
+  space:
+    ownership:
+      rules:
+        - effect: ALLOW
+          condition:
+            match: ctx.space.status.type == "USER"
+        - effect: ALLOW
+          condition:
+            match: '"<ADMIN_GROUP>" in ctx.user.spec.groups'
+  workspace:
+    limit:
+      maxPerUser: 30
+      maxActivePerUser: 5
+      maxSnapshotsPerUser: 20
+      defaultUserSpaceLimit:
+        cpu:
+          millicores: 2000
+        memory:
+          megabytes: 4096
+        storage:
+          megabytes: 20000
+      defaultOrganizationSpaceLimit:
+        cpu:
+          millicores: 4000
+        memory:
+          megabytes: 8192
+        storage:
+          megabytes: 40000
+      maxLimit:
+        cpu:
+          millicores: 16000
+        memory:
+          megabytes: 32768
+        storage:
+          megabytes: 200000
+    timeout:
+      userSpaceDuration:
+        hours: 8
+      organizationSpaceDuration:
+        hours: 24
+  volume:
+    limit:
+      maxPerSpace: 16
+      defaultSize:
+        megabytes: 10000
+      maxSize:
+        megabytes: 200000

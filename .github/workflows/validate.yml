@@ -41,6 +41,7 @@ jobs:
           python skills/octelium-management/scripts/validate_resources.py --help >/dev/null
           python skills/octelium-management/scripts/plan_apply.py --help >/dev/null
           python skills/octelium-management/scripts/export_resources.py --help >/dev/null
+          python skills/cordium/scripts/validate_resources.py --help >/dev/null
 
       - name: Helper, workflow and maintenance regression tests
         run: python -m unittest discover -s tests

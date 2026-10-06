@@ -1,0 +1,39 @@
+# One-shot AI agent or CI run: clone, install, run the task, stop.
+# Before using (the value is prompted, never stored here):
+#   cordium create secret <SECRET>.<SPACE>
+# Replace every <PLACEHOLDER>; <OWNER> is the Space owner's User name, or `cordium` for an
+# organization Space. Then:
+#   cordium create ws --file workspace-agent.yaml --space <SPACE> --ephemeral --branch <BRANCH> -o json
+#   cordium start <WORKSPACE> --var TASK="..."
+kind: Workspace
+spec:
+  image:
+    registry:
+      url: <IMAGE>
+  repository:
+    url: https://github.com/<ORG>/<REPO>
+  vars:
+    - name: TASK
+      value: Fix the failing tests.
+  runtime:
+    autoStop: true
+    envVars:
+      - key: <API_KEY_ENV>
+        fromSecret: <SECRET>.<SPACE>.<OWNER>
+    tasks:
+      - name: install
+        type: ON_CREATE
+        workingDir: /workspace/repo
+        run: <INSTALL_COMMAND>
+        onFailure: ON_FAILURE_ABORT
+      - name: agent
+        type: POST_START
+        workingDir: /workspace/repo
+        run: <AGENT_COMMAND> "${{ vars.TASK }}"
+  limit:
+    cpu:
+      millicores: 2000
+    memory:
+      megabytes: 4096
+    storage:
+      megabytes: 20000
