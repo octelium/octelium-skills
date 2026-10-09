@@ -30,6 +30,7 @@ spec:
         type: POST_START
         workingDir: /workspace/repo
         run: <AGENT_COMMAND> "${{ vars.TASK }}"
+        onFailure: ON_FAILURE_ABORT
   limit:
     cpu:
       millicores: 2000

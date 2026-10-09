@@ -1,0 +1,35 @@
+kind: Workspace
+spec:
+  image:
+    registry:
+      url: node:24-bookworm
+  repository:
+    url: https://github.com/<ORG>/<REPO>
+    cloneOptions:
+      branch: main
+  runtime:
+    envVars:
+      - key: NODE_ENV
+        value: development
+    tasks:
+      - name: dependencies
+        type: ON_CREATE
+        workingDir: /workspace/repo
+        run: npm ci
+        onFailure: ON_FAILURE_ABORT
+      - name: dev-server
+        type: POST_START
+        workingDir: /workspace/repo
+        run: npm run dev -- --host 0.0.0.0
+        isBackground: true
+  applications:
+    - name: web
+      port: 5173
+      isDefault: true
+  limit:
+    cpu:
+      millicores: 4000
+    memory:
+      megabytes: 8192
+    storage:
+      megabytes: 30000

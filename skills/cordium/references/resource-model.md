@@ -1,6 +1,8 @@
 # Resource model
 
-Docs: https://octelium.com/docs/cordium/latest/overview/concepts.md
+Docs: [Concepts](https://octelium.com/docs/cordium/latest/overview/concepts.md),
+[Spaces and Members](https://octelium.com/docs/cordium/latest/workspaces/spaces.md),
+[APIs and SDKs](https://octelium.com/docs/cordium/latest/use/api.md).
 
 Cordium resources use `apiVersion: cordium/v1`, `kind`, `metadata` (`name`, optional
 `displayName`, `description`, `labels`, `annotations`, `tags`; the rest is server-managed),
@@ -19,8 +21,8 @@ live in the Cordium API, not in Kubernetes and not in `octeliumctl`.
 | GitProvider | OAuth2 app for GitHub, GitLab or a generic provider, attached to Templates | `cordium create gitprovider` | `cordium.v1.GitProvider` |
 | UserSecret | Per-User sensitive value or generated SSH key | `cordium create usersecret` | `cordium.v1.UserSecret` |
 | UserConfig | Per-User dotfiles, env vars, tasks, preferred Region | Web console or API | `cordium.v1.UserConfig` |
-| Volume | Space-scoped persistent storage mounted by Workspaces | `cordium create volume` (newer than v0.15.0) | `cordium.v1.Volume` |
-| WorkspaceSnapshot | Point-in-time copy of a Workspace's storage | `cordium create snapshot` (newer than v0.15.0) | `cordium.v1.WorkspaceSnapshot` |
+| Volume | Space-scoped persistent storage mounted by Workspaces | `cordium create volume` | `cordium.v1.Volume` |
+| WorkspaceSnapshot | Point-in-time copy of a Workspace's storage | `cordium create snapshot` | `cordium.v1.WorkspaceSnapshot` |
 | Region | Octelium Region enabled for Workspaces | Read only (API) | `cordium.v1.Region` |
 | ClusterConfig | Cluster-wide Cordium settings (singleton) | `cordium man get cc`, `cordium man apply` | `cordium.v1.ClusterConfig` |
 
@@ -67,7 +69,8 @@ Consequences:
 - `cordium get tmpl|sec|gp|vol` without `--space` lists your personal `default` Space;
   `cordium get spaces` lists only Spaces you created (Spaces you joined appear in the web
   console).
-- `cordium create gitprovider --space` is ignored by the API; qualify the name instead.
+- Qualify GitProvider names with their Space; use the documented `cordium create gitprovider
+  <name>.<space>.<owner>` form.
 
 ## Quotas and built-in defaults
 

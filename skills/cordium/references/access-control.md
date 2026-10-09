@@ -1,7 +1,9 @@
 # Access control
 
-Docs: https://octelium.com/docs/cordium/latest/how.md,
-https://octelium.com/docs/octelium/latest/management/core/policy.md
+Docs: [Cordium access control](https://octelium.com/docs/cordium/latest/management/access-control.md),
+[Workspace Session Policies](https://octelium.com/docs/cordium/latest/workspaces/secretless.md#policies-for-workspaces),
+[Space roles](https://octelium.com/docs/cordium/latest/workspaces/spaces.md#members-and-roles),
+[Octelium Policies](https://octelium.com/docs/octelium/latest/management/core/policy.md).
 
 Three layers decide what happens:
 
@@ -68,11 +70,11 @@ The API enforces these checks after the Policies allow the call:
 | Create a Workspace in a Space | Any Member of the Space |
 | Read a Space, its Templates, GitProviders, Volumes, Memberships; list Secrets | Any Member |
 | Read a single Secret (metadata only) | ADMIN or OWNER |
-| Create Templates, Secrets, GitProviders, Volumes; update Templates and Volumes; delete Secrets and Volumes; pre-builds | ADMIN or OWNER |
-| Update or delete a GitProvider, delete a Template, update or delete a Space | Its creator (while still a Member) or an OWNER |
+| Create, update and delete Templates, Secrets, GitProviders and Volumes; pre-builds | ADMIN or OWNER; Secret rotation uses delete and re-create |
+| Update or delete a Space | OWNER |
 | Add, change or remove Members | ADMIN or OWNER; granting or removing OWNER needs an OWNER |
 | WorkspaceSnapshots | Their owner; restoring requires Membership in the snapshot's Space |
-| Create a Space | Users matched by ClusterConfig `spec.space.ownership` (references/cluster-config.md) |
+| Create an additional Space | Users matched by ClusterConfig `spec.space.ownership`; automatic personal `default` Spaces are exempt (references/cluster-config.md) |
 
 Roles are `OWNER`, `ADMIN` and `USER` (the default). Members can only be added to ORGANIZATION
 Spaces, by email or User reference of an existing User; a new OWNER must also be allowed to own
@@ -114,13 +116,19 @@ Other controls for agents and untrusted code:
 - **A dedicated User.** Run agents under a `WORKLOAD` User whose Policies grant only the
   Services the task needs, instead of a human admin's account.
 - **Egress rules.** `runtime.network.egress` with `defaultAction: DENY` and narrow ALLOW rules
-  limits direct network access (references/workspace-spec.md).
+  limits direct network access. Include DNS and public Cluster Gateway addresses needed by
+  `octelium connect` (references/workspace-spec.md).
 - **Serving.** `runtime.octelium.serveAll`/`serveServices` (`--serve-all`, `--serve`) let the
   Workspace host Services for other Users; enable only on request.
 - **SSH.** `spec.authorization.disableSSH: true` on a Space denies SSH to all its Workspaces.
 - **Sharing applications.** `ShareWorkspacePort` (web console or API) exposes an application to
   the Space's Members (`MEMBERS`) or every User (`ALL`); without sharing only the owner can open
   it.
+
+Tasks that access Services must use `POST_START` and wait for connectivity. Pre-builds have
+no Octelium tunnel, so they cannot use secretless access. Preserve the user API used by
+`octelium connect` when restricting administration APIs; see the
+[Workspace administration Policy example](https://octelium.com/docs/cordium/latest/management/access-control.md#policies-for-workspace-sessions).
 
 ## Diagnosing denials
 

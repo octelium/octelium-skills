@@ -1,7 +1,10 @@
 # Installing Cordium
 
-Docs: https://octelium.com/docs/cordium/latest/overview/quick-install.md,
-https://octelium.com/docs/cordium/latest/install/cluster.md
+Docs: [Quick installation](https://octelium.com/docs/cordium/latest/overview/quick-install.md),
+[Cluster installation](https://octelium.com/docs/cordium/latest/install/cluster.md),
+[CLI installation](https://octelium.com/docs/cordium/latest/install/cli.md),
+[storage](https://octelium.com/docs/cordium/latest/management/storage.md),
+[first steps](https://octelium.com/docs/cordium/latest/overview/first-steps.md).
 
 Cordium is an Octelium package: it needs a working Octelium Cluster on Kubernetes, nodes
 labeled for Workspaces, and a StorageClass that provisions volumes dynamically.
@@ -25,7 +28,8 @@ sudo env OCTELIUM_SKIP_MESSAGES=true bash install-cluster.sh --domain <DOMAIN> -
 
 Recommend `--longhorn` for Cordium. Without it, Workspaces use the K3s `local-path` StorageClass:
 Workspaces work, but Template pre-builds and WorkspaceSnapshots fail (no VolumeSnapshot API),
-Volumes can't grow, and SHARED Volumes can't be provisioned. Size the host for the Workspaces
+Volumes can't grow, and SHARED Volumes can't be provisioned. Longhorn also supports RWX shared
+Volumes when configured for them. Size the host for the Workspaces
 expected to run at once: each is capped at its limits (default 2 CPU cores, 6000 MB memory,
 20000 MB storage; references/cluster-config.md) but reserves almost nothing, so a busy node can
 be overcommitted.
@@ -78,6 +82,8 @@ Cluster (CNAME to `<DOMAIN>`). Cordium installs a self-signed placeholder certif
 2. Install the CLI on each client (below), then as the User: `cordium run` (creates the
    personal `default` Space on first use) or open `https://cordium.<DOMAIN>`.
 3. Review the ClusterConfig defaults (Space ownership, limits, timeouts): `cordium man get cc -o yaml`.
+4. Optionally configure an Octelium LLM Service for the built-in Cordium Agent:
+   [agent configuration](https://octelium.com/docs/cordium/latest/use/agent.md#configuring-the-agent).
 
 ## Verify
 

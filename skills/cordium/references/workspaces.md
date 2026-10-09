@@ -1,7 +1,10 @@
 # Running Workspaces
 
-Docs: https://octelium.com/docs/cordium/latest/use/cli.md,
-https://octelium.com/docs/cordium/latest/use/overview.md
+Docs: [CLI](https://octelium.com/docs/cordium/latest/use/cli.md),
+[access methods](https://octelium.com/docs/cordium/latest/use/access-methods.md),
+[SSH and IDEs](https://octelium.com/docs/cordium/latest/use/ssh.md),
+[applications](https://octelium.com/docs/cordium/latest/workspaces/applications.md),
+[environment and tasks](https://octelium.com/docs/cordium/latest/workspaces/runtime.md).
 
 ## Lifecycle
 
@@ -16,7 +19,7 @@ start ends `STOPPED` with `status.failure` (references/troubleshooting.md).
 | Stuck in `INIT_REQUEST` | Set to `STOPPED` after 5 minutes |
 | Still starting (pre-running states) | Stopped after 180 minutes |
 | `ON_CREATE` + `POST_START` tasks | 60 minutes on fresh runs and pre-builds, 20 minutes otherwise |
-| `PRE_STOP` tasks | 10 minutes |
+| `PRE_STOP` tasks; stuck in a stopping state | 10 minutes for tasks; 2 hours for the state |
 | `RUNNING` without activity | Stopped after the inactivity timeout (default 30 hours, references/cluster-config.md) |
 
 **Fresh runs.** The first successful run of a persistent Workspace and every run of an
@@ -53,11 +56,11 @@ with `run` and `create ws` alike: `--file`, `--template` or `--space` (mutually 
 build context), `--repository` with `--branch`, `--depth`, `--checkout`, `--additional-repo
 NAME=URL`, `-e KEY=VALUE`, `--env-from-secret KEY=<full Secret name>`, `--var NAME=VALUE`,
 `--cpu` (millicores), `--memory` and `--storage` (MB), `--port NAME:PORT[:default]` or `PORT`,
-`--auto-stop`, `--read-only`, `--cap-add`, `--cap-drop`, and after v0.15.0
-`--volume NAME:PATH[:ro]` and `--snapshot NAME`. Flags extend or override the `--file` spec.
+`--auto-stop`, `--read-only`, `--cap-add`, `--cap-drop`, `--volume NAME:PATH[:ro]` and
+`--snapshot NAME`. Flags extend or override the `--file` spec.
 
-`cordium run --serve-all/--serve` are accepted but not applied in v0.15.0 and the source
-checked; use `cordium create ws --serve-all ...` or `runtime.octelium` in the YAML.
+To serve Octelium Services, use `cordium create ws --serve <service>`/`--serve-all` or
+`runtime.octelium` in YAML; see [secretless access](https://octelium.com/docs/cordium/latest/workspaces/secretless.md#serving-services).
 
 ## Agents, scripts and CI
 
@@ -80,17 +83,26 @@ cordium delete ws "$ws"
 exit "$rc"
 ```
 
-- `cordium create ws --start` starts immediately but then prints a message instead of `-o`
-  output; create with `-o json`, then `cordium start`, when you need the name.
-- `STOPPED` after a start means failure: read `.status.failure` and `cordium logs "$ws"`.
+- The current CLI reference shows `cordium create ws --start -o json` to start and print the
+  created resource. If an installed CLI prints only a notification with `--start`, use
+  separate create/start calls as above. Neither approach waits for readiness; separate calls
+  also let you supply run-only vars.
+- After startup, `STOPPED` may mean failure, successful auto-stop, or an explicit stop. Inspect
+  `.status.failure` and `.status.stoppingReason`. Logs are unavailable after stop; stream and
+  capture them during initialization or while running.
 - `cordium exec` runs the command as the Workspace User (`--root` for root) through a shell:
   each argument is quoted, so use `-- sh -c '...'` for pipes and redirects. It forwards stdout,
-  stderr and the exit code. Always pass `--no-stdin` unless you stream input: without it, end
+  stderr and the exit code. Always pass `--no-stdin` for agent and CI commands: without it, end
   of file on the local stdin (`</dev/null`, closed stdin in agent shells and CI, the end of a
   piped input) kills the remote command. Move files with `cordium cp` instead of piping them.
 - For one-shot jobs, put the work in `POST_START`/`ON_CREATE` tasks with
   `runtime.autoStop: true` (`--auto-stop`): the Workspace stops after its non-background tasks
-  finish. Follow it with `cordium logs`.
+  finish. It may never reach `RUNNING`; wait for `STOPPED` with a deadline and inspect failure.
+  The SDKs provide `WaitUntilStopped`/`wait_until_stopped()` helpers. Follow logs while it runs.
+  Use `onFailure: ON_FAILURE_ABORT` on jobs whose exit status determines success.
+- Tasks using Octelium Services must be `POST_START` and wait for connectivity. Long-running
+  jobs should be background tasks that call `cordium stop` themselves; auto-stop does not wait
+  for them. See [CI/CD](https://octelium.com/docs/cordium/latest/examples/automation/cicd.md).
 - Per-run variables: `cordium start <ws> --var NAME=VALUE` overrides Workspace and Template
   `vars` for that run only.
 - `cordium stop` without a name inside a Workspace stops that Workspace (`CORDIUM_NAME`).
@@ -112,6 +124,8 @@ cordium ssh abc --print-config >> ~/.ssh/config  # Host cordium-abc for ssh, scp
 cordium cp ./data.csv abc:/workspace/repo/data.csv
 cordium cp -r abc:/workspace/repo/dist ./dist
 cordium cp abc:/workspace/repo/model.pt def:/workspace/repo/model.pt
+cordium code abc
+cordium code abc --dir /workspace/repo
 ```
 
 The printed SSH config disables host key checking for that host; tell the user before
@@ -123,15 +137,17 @@ appending it. SSH is denied when the Space sets `authorization.disableSSH`.
 
 | URL | Target |
 | --- | --- |
-| `https://<ws>.cordium.<DOMAIN>` | The application with `isDefault: true` |
+| `https://<ws>.cordium.<DOMAIN>` | The application with `isDefault: true`, else port 8080 |
 | `https://<app>_<ws>.cordium.<DOMAIN>` | A named application |
 | `https://port_<port>_<ws>.cordium.<DOMAIN>` | Any port |
 
-Non-default Regions add the Region: `<ws>.<region>.cordium.<DOMAIN>`. Only the owner can open
+Applications must listen on `0.0.0.0` inside the Workspace. `RUNNING` means initialization is
+complete; a background server may still need a health check. Read `status.hostname` for the
+actual hostname. Non-default Regions add the Region: `<ws>.<region>.cordium.<DOMAIN>`. Only the owner can open
 them unless an application is shared with the Space's Members or all Users (web console
 "share", API `ShareWorkspacePort`). These hostnames need the `*.cordium.<DOMAIN>` DNS record and
 certificate (references/install.md). Application traffic counts as activity for the inactivity
-timeout.
+timeout. Shared access uses the named application URL, not the root or arbitrary-port URL.
 
 ## Inside a Workspace
 
@@ -149,7 +165,8 @@ authorized per request against the owner's Policies; nothing secret is stored in
 
 ## Snapshots and Volumes
 
-Newer than v0.15.0 (check `cordium create --help`); details in references/storage.md.
+Read [storage.md](storage.md) for Volumes and snapshots, or the
+[snapshot workflow](https://octelium.com/docs/cordium/latest/examples/workflows/snapshots.md).
 
 ```bash
 cordium create snapshot before-upgrade --workspace abc   # asynchronous; wait for STATE_READY

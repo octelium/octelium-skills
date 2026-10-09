@@ -1,6 +1,9 @@
 # Spaces, Memberships, Templates and GitProviders
 
-Docs: https://octelium.com/docs/cordium/latest/overview/concepts.md
+Docs: [Spaces and Members](https://octelium.com/docs/cordium/latest/workspaces/spaces.md),
+[Templates and pre-builds](https://octelium.com/docs/cordium/latest/workspaces/templates.md),
+[GitProviders](https://octelium.com/docs/cordium/latest/workspaces/secrets.md#gitproviders).
+Worked example: [fast startup with pre-builds](https://octelium.com/docs/cordium/latest/examples/workflows/prebuilds.md).
 
 ## Spaces
 
@@ -12,7 +15,8 @@ Docs: https://octelium.com/docs/cordium/latest/overview/concepts.md
 | `spec.limit` | Not allowed | `defaultLimit`, `maxLimit` |
 | Secret-sourced Space env vars | Not allowed | Allowed |
 
-Both kinds need a matching ClusterConfig ownership rule (default: everyone). Creating a Space
+Creating additional Spaces of either kind needs a matching ClusterConfig ownership rule
+(installation default: everyone). The automatic personal `default` Space is exempt. Creating a Space
 also creates the creator's OWNER Membership and a `default` Template. Each User gets
 `default.<user>` automatically on their first Workspace without `--template`/`--space`.
 
@@ -41,11 +45,9 @@ spec:
 ```
 
 Deleting a Space deletes all its Workspaces (and their Sessions), Templates, Secrets, Volumes,
-WorkspaceSnapshots, GitProviders and Memberships. Only its creator or an OWNER can do it. In
-v0.15.0 and the source checked, `cordium delete space <name>` is rejected with
-`A UID must be set` (the API deletes Spaces by UID only): delete it in the web console after
-confirming the full impact with the user. Members other than the creator leave a Space in the
-web console.
+WorkspaceSnapshots, GitProviders and Memberships. Only an OWNER can do it.
+Use `cordium delete space <name>` or the portal within the user's authorized scope. Members
+other than the creator leave a Space in the portal.
 
 ## Memberships
 
@@ -77,7 +79,7 @@ Flags combine with `-f` and override it: `--image`/`--dockerfile`, `--repository
 `--depth`, `--checkout`, `-e`, `--env-from-secret KEY=<full Secret name>`,
 `--additional-repo NAME=URL`, `--cpu`, `--memory`, `--storage`, `--git-provider <full name>`.
 There is no update command: change a Template in the web console (Template settings) or with
-`UpdateTemplate` (whole spec replaced). Deleting a Template needs its creator or an OWNER and
+`UpdateTemplate` (whole spec replaced). Deleting a Template needs an ADMIN or OWNER and
 has no prompt; check its Workspaces first.
 
 ### Pre-builds
@@ -93,6 +95,11 @@ cordium build backend.my-project            # ADMIN or OWNER; starting another c
 cordium build backend.my-project --cancel
 cordium get tmpl backend.my-project -o json | jq '.status.buildInfo'
 ```
+
+Pre-builds do not run `octelium connect`: they have no secretless access. They also skip
+dotfiles, GitProvider credentials, background tasks and `PRE_STOP`. Private git therefore
+needs a Space Secret for a pre-build. Restored Workspaces apply their own dotfiles and runtime
+configuration and run `POST_START` normally.
 
 Requirements: a CSI driver with VolumeSnapshot support and a VolumeSnapshotClass
 (references/storage.md). Rebuild after changing the Template's image, repository or `ON_CREATE`
@@ -122,7 +129,9 @@ cordium create gitprovider forgejo.platform.cordium --type oauth2 \
 
 4. Attach it: `gitProvider: github.my-project.<you>` in the Template spec, or
    `--git-provider` when creating the Template.
-5. Each User authorizes once through the web console when starting a Workspace of that Template.
+5. Create a stopped Workspace, open its portal page, and sign in to the GitProvider before
+   starting. The token is reused on later runs until it expires, when the User signs in again.
+   It is available through the git credential helper to processes inside the Workspace.
 
 | Type | Endpoints | Default scopes |
 | --- | --- | --- |
@@ -130,5 +139,5 @@ cordium create gitprovider forgejo.platform.cordium --type oauth2 \
 | `gitlab` | gitlab.com | `read_user`, `write_repository` |
 | `oauth2` | `--auth-url`, `--token-url` (required) | None: at least one `--scope` is required |
 
-Use `oauth2` for self-managed GitLab, Gitea or Forgejo. At most 10 scopes. `--space` on
-`cordium create gitprovider` is ignored by the API; qualify the name instead.
+Use `oauth2` for self-managed GitLab, Gitea or Forgejo. At most 10 scopes. Qualify the
+GitProvider name with its Space.

@@ -1,0 +1,35 @@
+kind: Workspace
+spec:
+  image:
+    registry:
+      url: golang:1.26-bookworm
+  repository:
+    url: https://github.com/<ORG>/<REPO>
+    cloneOptions:
+      branch: main
+      singleBranch: true
+      depth: 1
+      disableLazyUnshallow: true
+  vars:
+    - name: TEST_COMMAND
+      value: go test ./...
+  runtime:
+    autoStop: true
+    tasks:
+      - name: dependencies
+        type: ON_CREATE
+        workingDir: /workspace/repo
+        run: go mod download
+        onFailure: ON_FAILURE_ABORT
+      - name: test
+        type: POST_START
+        workingDir: /workspace/repo
+        run: ${{ vars.TEST_COMMAND }}
+        onFailure: ON_FAILURE_ABORT
+  limit:
+    cpu:
+      millicores: 4000
+    memory:
+      megabytes: 8192
+    storage:
+      megabytes: 20000

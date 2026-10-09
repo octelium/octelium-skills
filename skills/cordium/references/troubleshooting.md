@@ -1,5 +1,10 @@
 # Troubleshooting
 
+Docs: [Storage failures](https://octelium.com/docs/cordium/latest/management/storage.md#troubleshooting),
+[task timeouts and failures](https://octelium.com/docs/cordium/latest/workspaces/runtime.md#timeouts-and-failures),
+[network policies](https://octelium.com/docs/cordium/latest/workspaces/network.md),
+[access control](https://octelium.com/docs/cordium/latest/management/access-control.md).
+
 ## Diagnose in layers
 
 1. **CLI and Session.** `cordium version`; `octelium status` under a timeout. No Session means
@@ -10,7 +15,8 @@
    `The User is not a Member in this Space`) are the ownership layer
    (references/access-control.md).
 3. **Start failures.** `cordium get ws <ws> -o yaml`: `status.state`, `status.failure`,
-   `status.stoppingReason`; `cordium logs <ws>` while it initializes or runs.
+   `status.stoppingReason`; `cordium logs <ws>` while it initializes or runs. Logs are not
+   retained after stop. An auto-stop job may succeed without reaching `RUNNING`.
 4. **Inside the Workspace.** `cordium exec <ws> --no-stdin -- <cmd>`: task output, `env`,
    `getent hosts <svc>` for Service name resolution, `octelium status`.
 5. **Kubernetes.** Pods, PVCs and events (below). Don't edit or delete Cordium-managed objects;
@@ -31,8 +37,6 @@
 | `You are not allowed to create this Space`, `This User is not authorized to become an OWNER` | ClusterConfig ownership rules | Ask an admin; don't relax the rules without a request |
 | `Number of Workspaces per User has been exceeded`, `Maximum limit of active Workspaces exceeded` | Quotas | Stop or delete Workspaces, or an admin raises the ClusterConfig limit |
 | `No Region accepts Workspaces` | Cordium not installed or no enabled Region | references/install.md |
-| `A UID must be set` | `cordium delete space` (API needs the UID) | Delete the Space in the web console after confirming the impact |
-| `Resource data must be set` | `cordium create usersecret --type ssh-key` | Create the SSH key in the web console |
 | `You cannot delete the default Template` | `default` Templates are permanent | Edit it instead |
 | `Secrets can only be used for ORGANIZATION Spaces`, `Cannot set Limits for USER Spaces` | USER Space restrictions | Use an ORGANIZATION Space, or Template/Workspace settings |
 | `Cannot add Members to User Spaces for now` | Memberships on a personal Space | Use an ORGANIZATION Space |
@@ -70,15 +74,24 @@ These produce no error at all:
 
 - Unknown fields in `--file`/`-f` YAML are dropped (validate with the helper).
 - `spec.isEphemeral` from a `--file` is replaced by the `--ephemeral` flag (false when omitted).
-- A deleted or misnamed Secret is skipped at start: the variable is just missing.
-- An invalid `.cordium.yaml` in the repository is ignored.
 - Undefined `${{ vars.X }}` references become empty strings.
-- `additionalRepositories[].clonePath` is ignored; failed additional clones only log.
-- `runtime.timeout` in a Template, and `cordium run --serve/--serve-all`, have no effect.
 - Task failures without `onFailure: ON_FAILURE_ABORT` don't stop initialization.
 - Image and `ON_CREATE` changes don't reach an existing persistent Workspace or an outdated
   Template pre-build.
 - `cordium exec` without `--no-stdin` kills the command when local stdin is closed.
+
+Other workflow failures:
+
+- Services accessed by `ON_CREATE` tasks are unavailable: `octelium connect` starts as a
+  background `POST_START` task. Move Service-dependent work to `POST_START` and wait for it.
+- Pre-builds have no secretless access or GitProvider token. Use public or Secret-authenticated
+  git and keep Service-dependent work out of foreground pre-build tasks.
+- Default-deny egress must allow DNS and public Cluster Gateway addresses for the tunnel,
+  along with git and package downloads. See the network policy page above.
+- A server listening only on `localhost` is unreachable through application URLs. Bind it
+  to `0.0.0.0`; health-check background servers after initialization.
+- Auto-stop ignores background tasks. Long jobs should stop their own Workspace after
+  completion, with artifacts stored outside ephemeral storage before stopping.
 
 ## Kubernetes checks
 

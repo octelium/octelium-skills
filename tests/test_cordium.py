@@ -158,7 +158,7 @@ spec:
         self.assertEqual(code, 0, doc)
         self.assert_messages(doc["warnings"], "gitProvider 'github.my-project' is not a full",
                              "fromSecret 'pat' is not a full", "fromSecret 'api-key.my-project' is not a full",
-                             "clonePath: ignored", "ignored in Templates", "serves its owner's Octelium Services",
+                             "clonePath: ignored", "workspace.timeout.allowNoTimeout", "serves its owner's Octelium Services",
                              "SYS_ADMIN widens")
 
     def test_full_secret_names_do_not_warn(self) -> None:
@@ -196,8 +196,72 @@ spec:
 """)
         code, doc = self.document(path)
         self.assertEqual(code, 0, doc)
-        self.assert_messages(doc["warnings"], "replaces the ENTIRE spec", "nobody can create Spaces",
-                             "only matchAny", "maxActiveDuration is not enforced")
+        self.assert_messages(doc["warnings"], "replaces the ENTIRE spec", "nobody can create additional Spaces",
+                             "automatic personal default Space is still created")
+        self.assertFalse(any("only matchAny" in warning for warning in doc["warnings"]), doc["warnings"])
+
+    def test_documented_storage_rule_contexts_are_supported(self) -> None:
+        path = self.write_yaml("""kind: ClusterConfig
+spec:
+  space:
+    ownership:
+      rules:
+        - effect: ALLOW
+          condition: {matchAny: true}
+  workspace:
+    storage:
+      storageClass:
+        rules:
+          - condition: {match: ctx.workspace.status.limit.storage.megabytes > 50000}
+            storageClass: fast
+      volumeSnapshotClass:
+        rules:
+          - condition: {match: ctx.template.metadata.name == "ci.payments.cordium"}
+            volumeSnapshotClass: snapshots
+  volume:
+    storage:
+      storageClass:
+        rules:
+          - condition: {match: ctx.volume.spec.accessMode == "ACCESS_MODE_SHARED"}
+            storageClass: nfs-csi
+""")
+        code, doc = self.document(path)
+        self.assertEqual((code, doc["errors"], len(doc["warnings"])), (0, [], 1))
+        self.assert_messages(doc["warnings"], "replaces the ENTIRE spec")
+
+    def test_default_deny_requires_dns_and_tunnel_connectivity(self) -> None:
+        code, doc = self.document("-", text="kind: Workspace\nspec:\n  runtime:\n"
+                                 "    network:\n      egress: {defaultAction: DENY}\n")
+        self.assertEqual(code, 0, doc)
+        self.assert_messages(doc["warnings"], "DNS", "public Gateway addresses", "octelium connect")
+
+    def test_portal_agent_configuration_uses_current_schema(self) -> None:
+        path = self.write_yaml("""kind: ClusterConfig
+spec:
+  space:
+    ownership:
+      rules:
+        - effect: ALLOW
+          condition: {matchAny: true}
+  agent:
+    llm:
+      service: claude
+      model: team-default
+    image:
+      registry: {url: node:24-bookworm}
+    config:
+      llm:
+        api: anthropic-messages
+        loginProviders: []
+      approvals:
+        api: write
+""")
+        code, doc = self.document(path)
+        self.assertEqual((code, doc["errors"]), (0, []))
+        path.write_text(path.read_text().replace("      model:", "      modelName:"))
+        code, doc = self.document(path)
+        self.assertEqual(code, 1)
+        self.assert_messages(doc["errors"], "'modelName' was unexpected")
 
     def test_cluster_config_is_a_singleton_with_kind(self) -> None:
         path = self.write_yaml("kind: ClusterConfig\nspec: {}\n---\nkind: ClusterConfig\nspec: {}\n")
@@ -215,6 +279,15 @@ spec:
         self.assert_messages(doc["warnings"], "no cordium command reads Volume YAML", "`cordium create volume`")
         code, doc = self.document("-", text="kind: Secret\nspec: {}\ndata: {value: synthetic}\n")
         self.assert_messages(doc["warnings"], "plaintext secret data")
+
+    def test_space_runtime_configuration_is_validated(self) -> None:
+        code, doc = self.document("-", text="kind: Space\nspec:\n  runtime:\n"
+                                 "    tasks:\n      - {name: setup, type: POST_START, run: echo ready}\n")
+        self.assertEqual((code, doc["errors"]), (0, []))
+        code, doc = self.document("-", text="kind: Space\nspec:\n  runtime:\n"
+                                 "    tasks:\n      - {name: setup, run: echo ready}\n")
+        self.assertEqual(code, 1)
+        self.assert_messages(doc["errors"], "type must be ON_CREATE")
 
     def test_octelium_resources_are_redirected(self) -> None:
         code, doc = self.document("-", text="apiVersion: core/v1\nkind: Service\nmetadata: {name: web}\nspec: {}\n")

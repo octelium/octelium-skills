@@ -1,25 +1,21 @@
 ---
 name: cordium
 description: >-
-  Install, configure and use Cordium, the identity-based sandbox platform built on Octelium and
-  Kubernetes, with the `cordium` CLI. Covers installing Cordium (quick installer `--cordium`,
-  `octops install-package`), running Workspaces (sandboxes) for developers, AI agents and CI
-  (`cordium run`, `create workspace`, `exec`, `ssh`, `cp`, `logs`, ephemeral and
-  auto-stop runs), Workspace and Template YAML (images, Dockerfiles, devcontainers, repositories,
-  tasks, env vars, vars, limits, applications, egress rules), Spaces, Memberships, Templates and
-  pre-builds, Secrets, GitProviders, UserSecrets, UserConfig, Volumes, WorkspaceSnapshots, the
-  Cordium ClusterConfig (`cordium man`) and Policies granting Cordium access. Use whenever
-  Cordium, its Workspaces or `cordium` commands are involved. Not for Octelium Services and
-  Policies in general (octelium-management), client tunnels (octelium-connect), or installing
-  and operating the Octelium Cluster (octelium-quick-install, octelium-kubernetes-install,
-  octelium-cluster-ops).
+  Install, configure and use Cordium, the identity-based sandbox platform built on Octelium
+  and Kubernetes. Use for Cordium Workspaces, the cordium CLI, Go/Python/Rust/TypeScript SDKs,
+  the web portal and Cordium Agent, Workspace/Template YAML, Spaces and Memberships, pre-builds,
+  Secrets and GitProviders, UserConfig and UserSecrets, Volumes and WorkspaceSnapshots,
+  secretless access, egress rules and the Cordium ClusterConfig. Routes to configuration
+  references and worked examples for development, AI agents and CI/CD. Not for Octelium
+  Services and Policies in general (octelium-management), client tunnels (octelium-connect),
+  or installing and operating the Octelium Cluster (octelium-quick-install,
+  octelium-kubernetes-install, octelium-cluster-ops).
 license: Apache-2.0
-compatibility: Requires the cordium CLI and an Octelium Session (octelium login) on a Cluster with the Cordium package. The helper script needs Python 3.9+ with PyYAML and jsonschema (or uv).
+compatibility: Cordium operations require an Octelium Session on a Cluster with the Cordium package; use the cordium CLI, portal or SDKs. The YAML helper needs Python 3.9+ with PyYAML and jsonschema (or uv).
 metadata:
   author: Octelium Labs, LLC
   version: "0.1.0"
-  verified-against: cordium v0.15.0
-  source-checked: cordium cc4af4b (2026-10-04)
+  verified-against: Cordium latest documentation (2026-10-09)
 ---
 
 # Cordium: sandboxes on Octelium
@@ -35,7 +31,8 @@ at `https://cordium.<DOMAIN>`, SSH and the gRPC API all use the same Cordium API
 ## Scope
 
 - **Use for:** installing or enabling Cordium, running Workspaces interactively or for agents
-  and CI, Workspace/Template YAML, Spaces, Memberships, Templates, pre-builds, Secrets,
+  and CI, SDK automation, the portal's Cordium Agent, Workspace/Template YAML, Spaces,
+  Memberships, Templates, pre-builds, Secrets,
   GitProviders, UserSecrets, UserConfig, Volumes, WorkspaceSnapshots, the Cordium ClusterConfig,
   Policies for Cordium access, Cordium troubleshooting.
 - **Hand off:** the Octelium Services a Workspace should reach, and Policies beyond Cordium
@@ -67,20 +64,23 @@ change first; ask only for missing inputs or unresolved destructive scope.
    Templates, Secrets, Volumes, WorkspaceSnapshots, GitProviders, Memberships) have no prompt
    or undo. State what is lost and proceed only within the user's authorized scope.
 6. **`cordium man apply` replaces the whole ClusterConfig spec.** Export it with
-   `cordium man get cc -o yaml`, edit only what was asked, keep `spec.space.ownership` (without
-   it nobody can create a Space, including each User's automatic `default` Space).
+   `cordium man get cc -o yaml`, edit only what was asked, and preserve `spec.space.ownership`.
+   Without ownership rules, Users cannot create additional Spaces; their automatic `default`
+   Space is still created.
 7. **Keep secrets out of arguments, files and chat.** Have the user run
    `cordium create secret <name>.<space>` (prompt), or use `--from-env VAR` or `-f -`. A Secret
    used as an env var is plaintext to every process in the Workspace, including an agent;
    prefer a secretless Octelium Service for credentials an agent must not hold.
 8. **A Workspace acts as its owner.** Its Session carries the owner's Octelium access. Run
-   untrusted agents under a narrowly authorized User, restrict egress, and scope Policies with
-   the Session's Cordium info (references/access-control.md). Never widen Policies, add
-   capabilities or share ports to make something work unless the user asks for that change.
+   agents with the access their task needs and scope Policies with the Session's Cordium info
+   (references/access-control.md). Egress restrictions must allow DNS and the Cluster Gateway
+   addresses for secretless access. Keep provider credentials at Octelium proxies when possible.
 9. **Don't block on interactive commands.** `cordium run` and `cordium terminal` attach an
    interactive terminal. As an agent, use `cordium create ws ... -o json`, `cordium start`, poll
    `cordium get ws <name>`, then `cordium exec <name> --no-stdin -- <cmd>` with a timeout
    (references/workspaces.md). Without `--no-stdin`, a closed stdin kills the remote command.
+   For tasks using Octelium Services, use `POST_START` and wait for connectivity. Auto-stop
+   jobs can finish before reaching `RUNNING`; inspect their failure and stopping reason.
 
 In helper commands, `cordium_skill_dir` is the absolute directory containing this loaded
 `SKILL.md`; keep the user's project as the working directory, e.g.
@@ -88,15 +88,17 @@ In helper commands, `cordium_skill_dir` is the absolute directory containing thi
 
 ## Workflow
 
-1. **Context.** Domain (`OCTELIUM_DOMAIN` or `--domain`), `cordium version` and
-   `octelium version`, an existing Session (`octelium status`, bounded by a timeout), whether
-   Cordium is installed (`cordium get spaces`). Missing CLI:
-   `curl -fsSL https://octelium.com/install-cordium.sh | bash` (references/install.md).
-2. **Route** with the references table below, and read the one the task needs.
+1. **Route** with the references table below. Use [references/documentation-map.md](references/documentation-map.md)
+   to find the current documentation and a worked example for the task.
+2. **Context for execution.** Domain (`OCTELIUM_DOMAIN` or `--domain`), the installed CLI or
+   SDK version, an existing Session (`octelium status`, bounded by a timeout), and whether
+   Cordium is installed (`cordium get spaces`). For a missing CLI, see references/install.md.
+   Documentation questions and YAML authoring do not need a live Cluster connection.
 3. **Prepare** the YAML or commands; validate files with the helper; check that referenced
    Secrets, Templates, GitProviders and Volumes exist in the same Space.
-4. **Execute** and follow state: `cordium get ws <name>` until `RUNNING` (or `STOPPED` with
-   `status.failure`), `cordium logs <name>` for image, clone and task output.
+4. **Execute** and follow state with a deadline: wait for `RUNNING` before executing commands,
+   or `STOPPED` for auto-stop jobs. Inspect `status.failure` and `status.stoppingReason`;
+   stream `cordium logs <name>` for image, clone and task output while the Workspace runs.
 5. **Verify and report:** what was created or changed, how to reach it (terminal, SSH,
    application URL), what keeps running, and how to stop or delete it.
 
@@ -108,12 +110,12 @@ In helper commands, `cordium_skill_dir` is the absolute directory containing thi
 | Create without attaching | `cordium create ws [same flags] [--start] [--auto-stop] [--serve-all \| --serve S] [-o yaml]` |
 | Lifecycle | `cordium start <ws> [--var K=V]`, `cordium stop <ws>`, `cordium delete ws <ws>` |
 | Inside a running Workspace | `cordium exec <ws> [-w DIR] [-e K=V] [--root] [--no-stdin] -- CMD`, `cordium terminal <ws>`, `cordium logs <ws> [-t]` |
-| SSH and files (need `octelium connect`) | `cordium ssh <ws> [-L ...] [-D ...] [-N] [-- CMD]`, `cordium ssh <ws> --print-config`, `cordium cp [-r] SRC DST` |
+| SSH, files and IDEs (need `octelium connect`) | `cordium ssh <ws> [-L ...] [-D ...] [-N] [-- CMD]`, `cordium ssh <ws> --print-config`, `cordium cp [-r] SRC DST`, `cordium code <ws> [--dir DIR]` |
 | Read | `cordium get ws\|spc\|tmpl\|sec\|gp\|usec\|vol\|snap [name] [-o yaml\|json]`, `--space S` for Space-scoped lists |
 | Spaces and Templates | `cordium create space <space>`, `cordium create template <name>.<space> [-f F] [flags]`, `cordium build <tmpl> [--cancel]` |
 | Secrets | `cordium create secret <name>.<space>` (prompt), `--from-env VAR`, `-f FILE\|-`; `cordium create usersecret <name>` |
 | GitProviders | `cordium create gitprovider <name>.<space> --type github\|gitlab\|oauth2 --client-id ID --client-secret-from-secret <full Secret name>` |
-| Storage (newer than v0.15.0) | `cordium create volume <name>[.<space>] --size MB [--shared]`, `cordium create snapshot <name> --workspace <ws>`, `create ws --volume NAME:PATH[:ro] \| --snapshot NAME` |
+| Storage | `cordium create volume <name>[.<space>] --size MB [--shared] [--region R]`, `cordium create snapshot <name> --workspace <ws>`, `create ws --volume NAME:PATH[:ro] \| --snapshot NAME` |
 | Cluster settings (admins) | `cordium man get cc -o yaml`, `cordium man apply <file>` |
 | Delete | `cordium delete ws\|tmpl\|sec\|gp\|usec\|vol\|snap <name>` (aliases `del`, `rm`) |
 
@@ -123,6 +125,7 @@ Read only what the task needs:
 
 | Need | File |
 | --- | --- |
+| Current documentation by task, configuration topic and worked example | [references/documentation-map.md](references/documentation-map.md) |
 | Installing Cordium, nodes, storage, DNS/TLS for `*.cordium.<DOMAIN>`, upgrades, CLI install | [references/install.md](references/install.md) |
 | Authentication, Policies for the Cordium API and console, Space roles, Workspace identity, scoping agents | [references/access-control.md](references/access-control.md) |
 | Kinds, naming and full-name rules, quotas and defaults, JSON Schema URLs | [references/resource-model.md](references/resource-model.md) |
@@ -133,17 +136,22 @@ Read only what the task needs:
 | Volumes, WorkspaceSnapshots, storage and snapshot classes | [references/storage.md](references/storage.md) |
 | Cordium ClusterConfig: ownership, limits, timeouts, storage rules | [references/cluster-config.md](references/cluster-config.md) |
 | Error messages, failure types, Kubernetes-level checks | [references/troubleshooting.md](references/troubleshooting.md) |
-| Exact `cordium` flags (v0.15.0 snapshot) | [references/cli-cordium.md](references/cli-cordium.md) |
-| Starting-point YAML (validated) | `assets/templates/*.yaml` |
+| Current CLI workflow, flags and direct links to command sections | [references/cli-workflows.md](references/cli-workflows.md) |
+| SDK selection, readiness, cleanup and the built-in Cordium Agent | [references/api-and-agent.md](references/api-and-agent.md) |
+| Offline help for an installed v0.15.0 CLI only; lacks newer commands | [references/cli-cordium.md](references/cli-cordium.md) |
+| Development server, CI, secretless agent, devcontainer and ClusterConfig YAML | [references/workspace-spec.md](references/workspace-spec.md#starting-point-assets) |
 
 ## Sources of truth
 
-1. **Resource structure:** the JSON Schema for the kind,
-   `https://octelium.com/schemas/cordium/latest/cordium.v1.<Kind>.schema.json` (bundled snapshot
-   in `assets/schemas/`). Schema beats prose examples for field names, types and enums.
-2. **CLI syntax:** `cordium <command> --help` on the installed version beats the bundled
-   snapshot.
-3. **Behavior:** this skill was checked against the Cordium source; where the docs at
-   https://octelium.com/docs/cordium/latest/llms.txt (Markdown twin at `<page-url>.md`) disagree
-   with it, trust this skill and the installed version's behavior. Use the docs for features
-   newer than this skill.
+1. **Behavior and workflows:** the [current Cordium documentation](https://octelium.com/docs/cordium/latest/llms.txt).
+   When it disagrees with this skill's summaries or older source notes, prefer the current docs.
+   Read only the relevant pages through [the documentation map](references/documentation-map.md).
+   Canonical pages have a Markdown twin at `<page-url>.md`; use `.md#section` for an anchor.
+2. **Resource structure:** the latest JSON Schema for the kind,
+   `https://octelium.com/schemas/cordium/latest/cordium.v1.<Kind>.schema.json` (offline snapshot
+   in `assets/schemas/`). Use it for exact field names, types and enums.
+3. **Installed-version syntax:** `cordium <command> --help`. The bundled v0.15.0 help is a
+   historical fallback, not a reference for current features. If a documented feature is
+   unavailable on the installed CLI or Cluster, identify the version mismatch before using it.
+4. **Unresolved details:** consult [Cordium source](https://github.com/octelium/cordium) for
+   the relevant version. Do not turn an old implementation bug into current guidance.

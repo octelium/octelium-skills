@@ -1,6 +1,12 @@
 # Workspace and Template YAML
 
-Docs: https://octelium.com/docs/cordium/latest/use/config.md
+Docs: [Configuration overview](https://octelium.com/docs/cordium/latest/workspaces/overview.md).
+For field-specific guidance, use [images](https://octelium.com/docs/cordium/latest/workspaces/image.md),
+[repositories](https://octelium.com/docs/cordium/latest/workspaces/repositories.md),
+[environment and tasks](https://octelium.com/docs/cordium/latest/workspaces/runtime.md),
+[applications](https://octelium.com/docs/cordium/latest/workspaces/applications.md),
+[network policies](https://octelium.com/docs/cordium/latest/workspaces/network.md) and
+[resources and timeouts](https://octelium.com/docs/cordium/latest/workspaces/resources.md).
 Schemas: https://octelium.com/schemas/cordium/latest/cordium.v1.Workspace.schema.json,
 https://octelium.com/schemas/cordium/latest/cordium.v1.Template.schema.json
 
@@ -12,8 +18,9 @@ https://octelium.com/schemas/cordium/latest/cordium.v1.Template.schema.json
 | Template document | `cordium create template <name>.<space> -f` | `spec` only; the name comes from the argument |
 | Repository config: first of `.cordium/workspace.yaml`, `.cordium/workspace.yml`, `.cordium.yaml`, `.cordium.yml` in the primary repository | The Workspace while initializing | Its `spec` is merged over the Template and Workspace specs |
 
-Both CLIs parse YAML leniently: unknown or misspelled fields are dropped without a message, and
-an invalid repository config file is ignored. Include `kind` and validate before use:
+Both CLIs parse YAML leniently: unknown or misspelled fields are dropped without a message.
+Repository configuration is validated like any other spec, including its Secret references.
+Include `kind` in CLI files and validate before use:
 
 ```bash
 uv run "$cordium_skill_dir/scripts/validate_resources.py" workspace.yaml template.yaml
@@ -32,15 +39,16 @@ and `gitProvider`. A Workspace spec adds `applications` and `isEphemeral` and ha
 
 | What | Rule |
 | --- | --- |
-| Spec | Template spec, then the Workspace spec, then the repository config file. A field set at a later level wins; lists (`envVars`, `tasks`, `additionalRepositories`, `applications`, egress `rules`, capabilities) are concatenated. |
+| Spec | Template spec, then Workspace spec, then repository configuration. Nested objects merge field by field; lists (env vars, tasks, additional repositories, Volume mounts, egress rules, capabilities) concatenate in that order. Applications and ephemerality belong to the Workspace; GitProvider belongs to the Template. |
 | Environment | UserConfig, then Space `runtime.envVars`, then the merged spec; later wins for the same key. Cordium's own variables (`CORDIUM_NAME`, `OCTELIUM_*`, `SSH_AUTH_SOCK`) are set last. |
-| Tasks | Merged spec tasks, then UserConfig tasks, then Space tasks; within that order all `ON_CREATE` (fresh runs only), then all `POST_START`; `PRE_STOP` on stop. |
+| Tasks | Template, Workspace, repository configuration, UserConfig, then Space tasks within each type: `ON_CREATE` (fresh runs), `POST_START` (every start), `PRE_STOP` (on stop). |
 | Variables | Template `vars`, then Workspace `vars`, then `cordium start --var` (that run only). |
-| Limits | The Workspace `limit` replaces the Template `limit` when set; each missing dimension falls back to the ClusterConfig default for the Space type, then 2000 millicores, 6000 MB memory, 20000 MB storage; the Space `maxLimit` and ClusterConfig `maxLimit` then cap them. In the source checked, a Space `limit.defaultLimit` is not applied to Workspaces created from a Template (all of them). |
+| Limits | First whole `limit` set by Workspace, Template, or ORGANIZATION Space `defaultLimit`; missing dimensions use ClusterConfig defaults for the Space type, then 2000 millicores, 6000 MB memory, 20000 MB storage. Space and ClusterConfig `maxLimit` cap the result. Read `status.limit` for effective values. |
 | Capabilities | Adds and drops from the merged spec, the Space runtime and the ClusterConfig are all passed to the container. |
 | Egress | From the merged spec: a Workspace can replace a Template's `defaultAction`, while Template DENY rules still apply. |
 
-`runtime.timeout` is read from the Workspace's own spec, not from the Template.
+Repository applications are not read. Its image is used only when neither the Workspace nor
+Template sets an image, or when the image is explicitly built from the repository.
 
 ## Variables
 
@@ -51,7 +59,7 @@ is not substituted in inline Dockerfiles, `fromSecret`, applications, limits, or
 UserConfig tasks. A reference to an undefined variable is replaced with an empty string. `vars`
 entries have only `name` and `value`.
 
-The API validates specs before substitution (v0.15.0 and later): a variable in
+The API validates specs before substitution: a variable in
 `cloneOptions.branch`, `cloneOptions.checkout` or `image.git.checkout` is rejected
 (`Invalid git branch: ...`), and so is a repository URL that is only a variable or contains a
 spaced reference (`Invalid repository URL`). Inside a URL, write the reference without spaces
@@ -79,29 +87,31 @@ and pre-builds.
 
 ```yaml fragment
 repository:
-  url: https://github.com/myorg/api        # https only
+  url: https://github.com/myorg/api
   cloneOptions:
     branch: main
-    checkout: v1.4.0                       # tag or commit after cloning
+    checkout: v1.4.0
     singleBranch: true
     shallowSubmodules: true
-    disableLazyUnshallow: true             # default: shallow clone, full history fetched in the background
-    depth: 1                               # only effective with disableLazyUnshallow
+    disableLazyUnshallow: true
+    depth: 1
   authentication:
     http:
       username: oauth2
       password:
         fromSecret: github-pat.my-project.alice
 additionalRepositories:
-  - name: shared                           # cloned to /workspace/additional-repos/shared
+  - name: shared
     repository:
       url: https://github.com/myorg/shared
 ```
 
-The primary repository is cloned to `/workspace/repo`. `additionalRepositories[].clonePath` is
-ignored in the source checked: they land in `/workspace/additional-repos/<name>`, and a failed
-additional clone is logged without stopping the run. With a GitProvider on the Template, omit
-`authentication`: the User's OAuth2 token is injected (references/spaces-and-templates.md).
+The primary repository is cloned to `/workspace/repo`; additional repositories land in
+`/workspace/additional-repos/<name>`. Clones happen on fresh runs only. By default, shallow
+clones are unshallowed asynchronously; `depth` takes effect with `disableLazyUnshallow: true`.
+With a GitProvider on the Template, omit `authentication` and sign in from the stopped
+Workspace's portal page. Its git credential helper makes the token usable by processes in
+the Workspace; prefer scoped read-only tokens or secretless git for untrusted workloads.
 
 ## Runtime
 
@@ -120,12 +130,14 @@ additional clone is logged without stopping the run. With a GitProvider on the T
 | `timeout.mode` | `DEFAULT`, or `DISABLED` (honored only when ClusterConfig `workspace.timeout.allowNoTimeout` is true) |
 | `volumeMounts[]` | `volumeRef.name` (a Volume of the same Space), absolute `mountPath`, `readOnly` (references/storage.md) |
 
-Egress rules filter the Workspace's direct traffic: DENY rules win over ALLOW rules, unmatched
-traffic follows `defaultAction`, and `ALLOW_PUBLIC` drops private and reserved ranges (RFC 1918,
-`100.64.0.0/10`, ...). Loopback, link-local and the Cluster's own networks are always denied.
-Access to Octelium Services goes through the Workspace's tunnel and is decided by Policies, not
-by these rules. With `defaultAction: DENY`, allow everything the job needs, including the DNS
-resolver in the Workspace's `/etc/resolv.conf`, and test the result
+Egress rules are enforced outside the sandbox. DENY rules win over ALLOW rules; unmatched
+traffic follows `defaultAction`, and `ALLOW_PUBLIC` drops non-public ranges. Supervisor/pod
+addresses, the pod gateway, external loopback and link-local destinations are always denied.
+Explicit ALLOW rules may permit other private destinations. With `defaultAction: DENY`, allow
+DNS (`8.8.8.8:53`), git hosts and package registries, plus the Cluster's public Gateway addresses
+for `octelium connect`. Requests inside the tunnel are then governed by Octelium Policies.
+Image pulls/builds happen before this policy is applied; clones and feature downloads happen
+inside it. Test the result
 (`cordium exec <ws> --no-stdin -- getent hosts example.com`) before relying on it.
 
 ```yaml fragment
@@ -156,20 +168,26 @@ network:
 `RUNNING` is reached after the non-background `ON_CREATE` and `POST_START` tasks finish, so a
 long foreground task delays it; use `isBackground: true` for servers.
 
+`octelium connect` is the first background `POST_START` task. Tasks accessing Octelium Services
+must use `POST_START` and wait for the Service to become reachable. Foreground tasks have a
+combined 60-minute timeout on fresh runs and 20 minutes on later persistent runs; `PRE_STOP`
+has 10 minutes. Long jobs can run in the background and call `cordium stop` when finished;
+do not combine that pattern with auto-stop, which does not wait for background tasks.
+
 ## Applications, limits, lifetime
 
 ```yaml fragment
-applications:                 # Workspace only
-  - name: web                 # https://<ws>.cordium.<DOMAIN> (default) or web_<ws>...
+applications:
+  - name: web
     port: 3000
-    isDefault: true           # at most one
+    isDefault: true
   - name: api
     port: 8080
 limit:
   cpu: {millicores: 4000}
   memory: {megabytes: 8192}
   storage: {megabytes: 30000}
-isEphemeral: true             # Workspace only; the CLI replaces it with --ephemeral (false if omitted)
+isEphemeral: true
 ```
 
 ## Example: one-shot agent run
@@ -179,7 +197,7 @@ kind: Workspace
 spec:
   image:
     registry:
-      url: node:22-bookworm
+      url: node:24-bookworm
   repository:
     url: https://github.com/myorg/api-service
   vars:
@@ -200,6 +218,7 @@ spec:
         type: POST_START
         workingDir: /workspace/repo
         run: claude -p "${{ vars.TASK }}"
+        onFailure: ON_FAILURE_ABORT
   limit:
     cpu:
       millicores: 2000
@@ -207,7 +226,24 @@ spec:
       megabytes: 4096
 ```
 
-Replace `anthropic-key.agents.alice` with the real full Secret name. Run it with
+This example uses a Space Secret; its value is readable by the agent. Prefer the
+[secretless Claude Code recipe](https://octelium.com/docs/cordium/latest/examples/ai/claude-code.md)
+when an Octelium LLM Service is available. Replace `anthropic-key.agents.alice` with the real full Secret name. Run it with
 `cordium create ws --file agent.yaml --ephemeral --branch <branch> -o json`, then
 `cordium start <ws> --var TASK="..."`, and follow `cordium logs <ws>`. More starting points:
-`assets/templates/`.
+the assets below.
+
+## Starting-point assets
+
+Copy the relevant asset into the user's project, replace placeholders, and validate it before
+creating a resource. Workspace and Template files contain `kind` for the helper; the CLI uses
+their `spec`. Pass `--ephemeral` explicitly for disposable CLI-created Workspaces.
+
+| Asset | Use | Prerequisites |
+| --- | --- | --- |
+| [workspace-dev.yaml](../assets/templates/workspace-dev.yaml) | Persistent Node.js dev server with an HTTPS application | Repository with `npm ci` and a `dev` script supporting `--host` |
+| [workspace-ci.yaml](../assets/templates/workspace-ci.yaml) | Foreground test job with abort-on-failure and auto-stop | Choose the repository, image and test command; capture logs while running |
+| [workspace-secretless-agent.yaml](../assets/templates/workspace-secretless-agent.yaml) | One-shot Claude Code run through an Octelium LLM Service | Authorized LLM Service; image with Node.js, npm, curl and timeout; task fits foreground timeout |
+| [workspace-agent.yaml](../assets/templates/workspace-agent.yaml) | Agent with a Space Secret when direct credentials are needed | Create the Secret and use its full name; value is visible inside the Workspace |
+| [template-devcontainer.yaml](../assets/templates/template-devcontainer.yaml) | Team devcontainer Template with GitProvider | Create GitProvider; each User signs in before starting; pre-builds need separate Secret-based git auth |
+| [cluster-config.yaml](../assets/templates/cluster-config.yaml) | Ownership, quotas, limits and timeouts | Merge into exported current ClusterConfig; applying replaces the entire spec |

@@ -70,11 +70,13 @@ The management and Cordium helper scripts need Python 3.9+ with `pyyaml` and `js
   `apply --prune` deletes missing resources of *every* included kind (including
   the built-in `root` User, `root-init` Credential and `allow-all` Policy); `octops init` deletes an
   existing `octelium` namespace and wipes the datastores it is given; `octops` confirmation prompts
-  are skipped when there is no TTY; web login blocks waiting for a browser. Cordium was checked
-  against its source and the v0.15.0 binary, which corrects the docs in places: `cordium` drops
+  are skipped when there is no TTY; web login blocks waiting for a browser. Cordium follows its
+  current documentation, with a task index linking configuration pages and worked examples,
+  CLI workflows, SDK guidance and the built-in Agent. `cordium` drops
   unknown YAML fields silently, spec references such as `fromSecret` need full
   `<name>.<space>.<owner>` names, `cordium man apply` replaces the whole ClusterConfig spec, and
-  `cordium ssh`/`cp` need an `octelium connect` tunnel.
+  `cordium ssh`/`cp` need an `octelium connect` tunnel. The bundled v0.15.0 help is retained only
+  as an offline reference for that older CLI.
 - **Native checks and supporting tools.** Prefer `octeliumctl validate` and
   `octeliumctl apply --dry-run` when the installed CLI supports them. Both were confirmed in
   Octelium source on 5 October 2026; the installed v0.43.0 binary lacks them. Validation is

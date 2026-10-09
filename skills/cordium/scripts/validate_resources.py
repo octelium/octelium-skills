@@ -354,7 +354,7 @@ def check_mount_path(r: Report, value: Any, path: str) -> None:
         r.error(f"{path}: mountPath {mount} is reserved by the Cluster")
 
 
-def check_runtime(r: Report, runtime: Any, path: str, kind: str) -> None:
+def check_runtime(r: Report, runtime: Any, path: str) -> None:
     runtime = mapping(runtime)
     envs = sequence(runtime.get("envVars"))
     if len(envs) > 128:
@@ -423,11 +423,11 @@ def check_runtime(r: Report, runtime: Any, path: str, kind: str) -> None:
             if not isinstance(port, int) or isinstance(port, bool) or not 1 <= port <= 65535:
                 r.error(f"{where}/ports: invalid port {port!r}")
     if egress.get("defaultAction") == "DENY":
-        r.warn(f"{path}/network/egress: defaultAction DENY also blocks name resolution unless allowed; "
-               "test the Workspace before relying on it")
+        r.warn(f"{path}/network/egress: defaultAction DENY requires ALLOW rules for DNS and the "
+               "Cluster's public Gateway addresses for octelium connect; test connectivity")
     if mapping(runtime.get("timeout")).get("mode") == "DISABLED":
         r.warn(f"{path}/timeout: DISABLED takes effect only with ClusterConfig "
-               "workspace.timeout.allowNoTimeout" + (" and is ignored in Templates" if kind == "Template" else ""))
+               "workspace.timeout.allowNoTimeout")
     mounts = sequence(runtime.get("volumeMounts"))
     if len(mounts) > 16:
         r.error(f"{path}/volumeMounts: more than 16 mounts")
@@ -528,7 +528,7 @@ def check_spec(r: Report, kind: str, spec: dict[str, Any]) -> None:
             r.error(f"{where}/repository must be set")
         else:
             check_repository(r, repo.get("repository"), f"{where}/repository", url_required=True)
-    check_runtime(r, spec.get("runtime"), "runtime", kind)
+    check_runtime(r, spec.get("runtime"), "runtime")
     apps = sequence(spec.get("applications"))
     if len(apps) > 128:
         r.error("applications: more than 128 applications")
@@ -568,17 +568,11 @@ def check_spec(r: Report, kind: str, spec: dict[str, Any]) -> None:
 def check_cluster_config(r: Report, spec: dict[str, Any]) -> None:
     rules = sequence(mapping(mapping(spec.get("space")).get("ownership")).get("rules"))
     if not rules:
-        r.warn("space/ownership has no rules: nobody can create Spaces, including the automatic default Space")
+        r.warn("space/ownership has no rules: nobody can create additional Spaces; "
+               "the automatic personal default Space is still created")
     for idx, rule in enumerate(rules):
         if mapping(rule).get("effect") not in ("ALLOW", "DENY"):
             r.warn(f"space/ownership/rules/{idx}: a rule without ALLOW or DENY is ignored")
-    workspace = mapping(spec.get("workspace"))
-    for idx, rule in enumerate(sequence(mapping(mapping(workspace.get("storage")).get("storageClass")).get("rules"))):
-        if mapping(mapping(rule).get("condition")) != {"matchAny": True}:
-            r.warn(f"workspace/storage/storageClass/rules/{idx}: in the source checked, only matchAny "
-                   "conditions match for Workspace storage classes")
-    if mapping(workspace.get("timeout")).get("maxActiveDuration") is not None:
-        r.warn("workspace/timeout/maxActiveDuration is not enforced in the source checked")
 
 
 def check_document(doc: dict[str, Any], kind: str) -> Report:
@@ -604,7 +598,7 @@ def check_document(doc: dict[str, Any], kind: str) -> Report:
         check_cluster_config(r, spec)
     else:
         if kind == "Space":
-            check_runtime(r, spec.get("runtime"), "runtime", kind)
+            check_runtime(r, spec.get("runtime"), "runtime")
         if kind == "UserConfig":
             for idx, env in enumerate(sequence(spec.get("envVars"))):
                 check_env_var(r, env, f"envVars/{idx}", "fromUserSecret")

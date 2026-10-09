@@ -7,6 +7,8 @@
    anything destructive or surprising, the source in
    [octelium/octelium](https://github.com/octelium/octelium). Record version-specific behavior
    with the version ("since v0.40.0").
+   For Cordium's current workflows, prefer the latest Cordium documentation over older skill
+   summaries and source notes; distinguish installed-version differences with the CLI's help.
 2. **Keep `SKILL.md` operational and short** (target ≤ ~2.5k tokens, hard limit 500 lines):
    scope and hand-offs, ground rules, workflow, reference routing, sources of truth. Put details
    in `references/` and link every reference file from `SKILL.md`.
@@ -114,6 +116,19 @@ Cordium example are errors, not silently skipped.
 CLI generation verifies the binary's reported version and every help command before updating
 any requested output. New snapshots record the executable hash, command count and generator
 version; both octops copies must agree. `--check` reports drift without writing references.
+
+When Cordium documentation changes, check the skill's page and section links against the
+current docs source checkout. Routes use page frontmatter IDs, which can differ from filenames:
+
+```bash
+python3 scripts/validate_cordium_docs.py --docs-dir /path/to/app/docs/cordium/latest
+scripts/sync_schemas.sh --set cordium --from /path/to/app/schemas/cordium/latest
+```
+
+The link check runs offline and requires PyYAML. It checks Cordium documentation URLs in the
+skill's Markdown files, including section anchors, without depending on a live website.
+Use the documentation map to route tasks to current pages and worked examples; keep the
+generated CLI help explicitly scoped to its recorded version.
 
 Schema sync validates and stages the complete set: core/v1 for `octelium-management` and
 cordium/v1 for `cordium` (`--set` selects one; remote sync defaults to both, `--from` to

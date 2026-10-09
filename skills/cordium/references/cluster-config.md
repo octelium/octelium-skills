@@ -1,6 +1,8 @@
 # Cordium ClusterConfig
 
-Docs: https://octelium.com/docs/cordium/latest/use/clusterconfig.md
+Docs: [Cluster configuration](https://octelium.com/docs/cordium/latest/management/clusterconfig.md),
+[storage backends](https://octelium.com/docs/cordium/latest/management/storage.md),
+[Cordium Agent configuration](https://octelium.com/docs/cordium/latest/use/agent.md#configuring-the-agent).
 Schema: https://octelium.com/schemas/cordium/latest/cordium.v1.ClusterConfig.schema.json
 
 One Cordium ClusterConfig (`default`) holds the Cluster-wide Cordium settings. It is separate
@@ -42,10 +44,10 @@ spec:
 
 ## `spec.space.ownership`
 
-Decides who may create (own) Spaces, including each User's automatic `default` Space and new
+Decides who may create (own) additional Spaces and new
 OWNER Memberships. DENY rules are evaluated first, then ALLOW rules; no match denies. A rule
-whose condition fails to evaluate is skipped. **Without rules nobody can create a Space**, so
-new Users can't even start their first Workspace.
+whose condition fails to evaluate is skipped. **Without rules nobody can create additional
+Spaces**; each User still gets their automatic personal `default` Space.
 
 Conditions use the Octelium condition types (`match`, `not`, `matchAny`, `all`, `any`, `none`,
 `opa`) over `ctx.user` (the Octelium User: `metadata.name`, `spec.type`, `spec.email`,
@@ -80,18 +82,16 @@ spec:
 | `limit.buildLimit` | Resources of pre-build Workspaces | 2000 millicores, 6000 MB, 20000 MB |
 | `timeout.userSpaceDuration`, `timeout.organizationSpaceDuration`, `timeout.defaultDuration` | Inactivity before a `RUNNING` Workspace is stopped: by Space type, else the default | 30 hours |
 | `timeout.allowNoTimeout` | Lets a Workspace's own `runtime.timeout.mode: DISABLED` take effect | false |
-| `timeout.maxActiveDuration` | Present in the schema; not enforced in the source checked | |
 | `runtime.capabilities.add/drop` | Linux capabilities added to and dropped from every Workspace | None |
-| `storage.storageClass.rules[]` | `condition` and `storageClass` for Workspace volumes; first match wins, else the default StorageClass | Default class |
+| `storage.storageClass.rules[]` | `condition` over `ctx.workspace` and `storageClass`; first match wins, else the default StorageClass | Default class |
 | `storage.volumeSnapshotClass.rules[]` | `condition` (over `ctx.workspace`, `ctx.template`) and `volumeSnapshotClass` for pre-builds and WorkspaceSnapshots | The driver's default class |
 
 Limits use `cpu.millicores`, `memory.megabytes`, `storage.megabytes`; durations use one unit
 (`minutes`, `hours`, `days`, ...). Terminals, `exec`, SSH sessions and application traffic count
 as activity.
 
-In the source checked, Workspace `storageClass` rule conditions can't read the Workspace (it
-isn't passed under `ctx`), so only `matchAny: true` rules match; other rules are skipped. Use
-one class for all Workspaces until this changes, and verify with
+Use `ctx.workspace.status.limit` in storage rules when routing by effective resources, and
+`ctx.template` in pre-build snapshot rules. Verify the selected class with
 `kubectl -n cordium get pvc ws-<workspace-uid> -o jsonpath='{.spec.storageClassName}'`.
 
 ```yaml fragment
@@ -144,4 +144,14 @@ spec:
             storageClass: nfs-client
 ```
 
-A complete, validated starting point: `assets/templates/cluster-config.yaml`.
+## `spec.agent`
+
+Configure the built-in portal agent with `isDisabled`, `llm.service`, `llm.model`, `version`,
+`image`, `limit` and `config`. Additional `config` settings control provider protocols,
+subscription logins, approvals, instructions and skills repositories. Read
+[api-and-agent.md](api-and-agent.md#built-in-cordium-agent) and the
+[complete agent reference](https://octelium.com/docs/cordium/latest/use/agent.md#configuring-the-agent)
+before changing these fields. The agent's LLM Service still needs an Octelium Policy granting
+the Users access.
+
+A complete, validated starting point: [cluster-config.yaml](../assets/templates/cluster-config.yaml).
