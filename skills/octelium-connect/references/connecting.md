@@ -2,9 +2,9 @@
 
 Docs: https://octelium.com/docs/octelium/latest/user/cli/connect.md
 
-`connect` authenticates first (same rules as `login`; `--auth-token`, `--assertion`, `--scope`
-are accepted), then brings up the tunnel. It uses IPv6-only addressing by default when the
-Cluster supports it.
+`connect` authenticates first (same rules as `login`; `--auth-token`, `--auth-token-file`,
+`--assertion`, `--scope` are accepted), then brings up the tunnel. It uses IPv6-only addressing
+by default when the Cluster supports it.
 
 ## Run modes
 
@@ -16,7 +16,14 @@ Cluster supports it.
 | Stop | `octelium disconnect` | Asks the Cluster to disconnect the current Session's connection for that domain. |
 
 Authentication happens before detaching, so a missing Session triggers the interactive
-login first. In automation, provide `--auth-token`/`OCTELIUM_AUTH_TOKEN` or `--assertion`.
+login first. In automation, provide `--auth-token-file` / `OCTELIUM_AUTH_TOKEN_FILE` (v0.51.0+),
+`OCTELIUM_AUTH_TOKEN` or `--assertion`.
+
+Since v0.51.0, Linux detached connections use a transient unit named
+`octelium-connect-<domain>.service` when systemd supports `--collect` (v236+). Inspect that
+unit's status and journal for startup failures; older systemd uses a generated unit name.
+Stopped units are collected automatically. Use `octelium disconnect` for the intended domain
+or the retained process handle for a temporary foreground connection.
 
 ## Tunnel implementation
 
@@ -26,7 +33,7 @@ Chosen automatically; override with `--implementation`:
 | --- | --- | --- |
 | `kernel` | Linux WireGuard module (5.6+) and root or `NET_ADMIN` | Fastest. |
 | `tun` | root/`NET_ADMIN` (Linux, plus `/dev/net/tun` or `MKNOD`), root on macOS, admin on Windows | wireguard-go. |
-| `gvisor` | nothing | Userspace TCP/IP stack; only `-p` publishing works. Used automatically without privileges. |
+| `gvisor` | nothing | Userspace TCP/IP stack; use `-p` for local access. Serving works too, including UDP since v0.49.0. Used automatically without privileges. |
 
 Tunnel protocol: WireGuard by default. `--tunnel-mode quicv0` (or `OCTELIUM_QUIC=true`) uses the
 experimental QUIC mode, only if the Cluster enabled it.
@@ -58,6 +65,10 @@ octelium connect -p svc.ns:[::1]:9000           # IPv6 bind
 
 Publishing works in every mode and is the only access path in rootless/gVisor mode. Keep the
 default loopback bind unless the user explicitly wants to share the port.
+
+Since v0.49.0, a published Service that does not exist yet is retried while the Connection
+stays up and its port is published when available. Check Service existence, authorization and
+client logs before treating a missing listener as a permanent startup failure.
 
 ## Serving Services from this host
 
@@ -92,6 +103,7 @@ the user asks, and say who can use them (whoever the Cluster's Policies allow on
 | --- | --- |
 | `OCTELIUM_DOMAIN` | Default Cluster domain. |
 | `OCTELIUM_AUTH_TOKEN` / `OCTELIUM_AUTH_ASSERTION` / `OCTELIUM_ACCESS_TOKEN` | Non-interactive authentication. |
+| `OCTELIUM_AUTH_TOKEN_FILE` / `OCTELIUM_ACCESS_TOKEN_FILE` | Private token file paths (v0.51.0+); see authentication.md. |
 | `OCTELIUM_HOME` | State directory (profile); `mem` for in-memory. Also `--homedir`. |
 | `OCTELIUM_DEV=true` | Debug logs. Verbose; review before sharing. |
 | `OCTELIUM_INSECURE_TLS=true` | Skip Cluster certificate verification. Temporary, pre-certificate only. |
@@ -108,3 +120,9 @@ the user asks, and say who can use them (whoever the Cluster's Policies allow on
 host networking for one OS user and serves a local API to frontends (the CLI, the desktop app).
 It is normally installed as an OS service by packages; don't start it by hand unless the user
 is debugging it (`octelium daemon --help`).
+
+Since v0.51.0, `--owner-policy login-session` is the default: the first caller normally needs an
+OS login session. Root/SYSTEM callers and platforms without a usable login-session check are
+accepted without one. `--owner <UID|SID>` fixes the owner explicitly;
+`--owner-policy first-caller` allows the first caller without that check. Change ownership only
+for the intended OS user; local API calls from other users are rejected once an owner is chosen.

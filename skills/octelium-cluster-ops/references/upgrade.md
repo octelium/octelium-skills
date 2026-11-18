@@ -12,7 +12,8 @@ octops upgrade <DOMAIN> [--version <v>] [--wait] [--kubeconfig ...]         # de
 - Upgrade runs a Genesis job `octelium-genesis-upgrade-<random>` in the `octelium` namespace
   that updates the components. Without `--wait`, `octops` returns as soon as the job starts;
   prefer `--wait`, or follow `kubectl -n octelium logs -f job/<name>`.
-- It does not reset data (unlike `octops init`).
+- It preserves the Cluster's resources and data. `octops init` is for a new installation or,
+  since v0.50.0, resuming an interrupted one; it is not an upgrade command.
 - Quick-install hosts: `KUBECONFIG=/etc/rancher/k3s/k3s.yaml`; re-running the installer with a
   new `--version` is **not** an upgrade.
 
@@ -35,6 +36,11 @@ octops upgrade <DOMAIN> [--version <v>] [--wait] [--kubeconfig ...]         # de
    `octops upgrade`.
 6. Agree on a window: Services and tunnels can blip while components roll.
 
+When crossing v0.44.0, update public Gateway/Region DNS records from the old `_gw-` / `_r-`
+names to the `octelium-gw-` / `octelium-region-` names reported in status. The quick installer's
+single-node wildcard DNS needs no change. Service names starting with `octelium` are reserved
+since that release.
+
 ### After
 
 ```bash
@@ -48,6 +54,11 @@ Then log in and connect from a client, and test one Service of each important mo
 If the upgrade job fails: collect its logs (`kubectl -n octelium logs job/<name>`), don't retry in a
 loop, don't run `init`; fix the reported cause (often image pulls or node resources) and re-run
 `octops upgrade`, or escalate with the logs.
+
+Since v0.50.0, `--wait` follows the submitted Genesis Job and reports Job/Pod failures.
+Genesis prevents concurrent initialization/upgrade runs and checks the target domain, Region
+and storage identity. A local timeout does not cancel a Kubernetes Job; inspect it before
+submitting another operation. Don't delete Genesis state or locks to bypass a refusal.
 
 ## CLI upgrades
 
@@ -68,5 +79,10 @@ octops install-package <DOMAIN> --package cordium       # or octeliumee (Enterpr
 octops install-package <DOMAIN> --package cordium --upgrade [--version <v>]
 ```
 
-Quick-install hosts can also pass `--cordium`/`--enterprise` at install time. The Enterprise
-package is free for personal and evaluation use; production licensing is the user's call.
+Quick-install hosts can also pass `--cordium`/`--enterprise` at install time, with
+`--cordium-version` / `--enterprise-version` to pin the package. See
+[Enterprise installation](https://octelium.com/docs/octelium/latest/install/cluster/enterprise.md)
+for the package workflow and [Enterprise](https://octelium.com/docs/octelium/latest/overview/enterprise.md)
+for its features and licensing. Production and commercial use require a commercial license;
+subscriptions and license downloads are available from the [customer portal](https://portal.octelium.com).
+The [live demo](https://demo.octelium.com) includes the Enterprise console.

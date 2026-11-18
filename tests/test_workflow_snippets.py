@@ -150,7 +150,8 @@ print(value if "-r" in args else json.dumps(value))
         text = self.recipe("octelium-cluster-ops", "recovery-and-uninstall.md", 0)
         return text.replace("/secure/path/", str(self.directory) + "/").replace("<DOMAIN>", "example.com")
 
-    def test_recovery_uses_environment_and_removes_temporary_token(self) -> None:
+    def test_recovery_uses_token_file_and_removes_temporary_token(self) -> None:
+        self.env.pop("OCTELIUM_AUTH_TOKEN", None)
         self.fake_command("kubectl", '''
 import base64
 print(base64.b64encode(b"synthetic-initial-token").decode())
@@ -165,7 +166,9 @@ directory = Path(os.environ["OCTELIUM_TEST_DIR"])
 files = list(directory.glob("init-token.*"))
 assert len(files) == 1
 assert stat.S_IMODE(files[0].stat().st_mode) == 0o600
-assert os.environ["OCTELIUM_AUTH_TOKEN"] == "synthetic-initial-token"
+assert sys.argv[1:] == ["login", "--domain", "example.com", "--auth-token-file", str(files[0])]
+assert files[0].read_text() == "synthetic-initial-token"
+assert "OCTELIUM_AUTH_TOKEN" not in os.environ
 assert "synthetic-initial-token" not in " ".join(sys.argv)
 (directory / "login-called").touch()
 ''')
@@ -188,7 +191,7 @@ assert "synthetic-initial-token" not in " ".join(sys.argv)
         path = ROOT / "skills" / "octelium-kubernetes-install" / "SKILL.md"
         recipe = re.findall(r"```bash\n(.*?)\n\s*```", path.read_text(), re.S)[0]
         recipe = recipe.replace("<DOMAIN>", "example.com").replace("<path>", "kubeconfig").replace("<ctx>", "context")
-        recipe = recipe.replace("[--version <v>]", "--version v0.43.0")
+        recipe = recipe.replace("[--version <v>]", "--version v0.51.0")
         self.fake_command("octops", '''
 import os
 import stat

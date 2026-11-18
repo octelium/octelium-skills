@@ -5,11 +5,11 @@ The skills tell agents to prefer `<cli> --help` on the installed version. These 
 are the offline snapshot used when the CLI is not installed yet. Regenerate them for every
 Octelium release:
 
-    python3 scripts/generate_cli_reference.py --bin-dir /path/to/release/bin --version v0.43.0
+    python3 scripts/generate_cli_reference.py --bin-dir /path/to/release/bin --version v0.51.0
 
 The cordium CLI is versioned separately and is generated only when requested:
 
-    python3 scripts/generate_cli_reference.py --bin-dir /path/to/bin --version v0.15.0 --only cordium
+    python3 scripts/generate_cli_reference.py --bin-dir /path/to/bin --version v0.20.0 --only cordium
 
 Only the standard library is used. The binaries run with an isolated OCTELIUM_HOME and without
 inherited OCTELIUM_* settings. Only version and help commands are executed.
@@ -43,7 +43,7 @@ TARGETS = {
 SEPARATELY_VERSIONED = {"cordium"}
 
 SKIP_SUBCOMMANDS = {"help", "completion"}
-GENERATOR_VERSION = "2"
+GENERATOR_VERSION = "3"
 
 
 def run_command(binary: str, args: list[str], env: dict[str, str]) -> str:
@@ -112,7 +112,7 @@ def strip_noise(text: str, is_root: bool) -> str:
             continue
         if re.match(r"^\s+-h, --help\s+help for ", line):
             continue
-        out.append(line.rstrip())
+        out.append(line.expandtabs().rstrip())
     # Collapse runs of blank lines.
     return re.sub(r"\n{3,}", "\n\n", "\n".join(out)).strip("\n")
 
@@ -163,7 +163,7 @@ def render(name: str, version: str, commands: list[tuple[list[str], str, str]], 
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--bin-dir", help="directory holding the CLI binaries (default: PATH)")
-    ap.add_argument("--version", required=True, help="expected binary release version, e.g. v0.43.0")
+    ap.add_argument("--version", required=True, help="expected binary release version, e.g. v0.51.0")
     ap.add_argument("--only", choices=sorted(TARGETS), action="append",
                     help="generate only these CLIs (default: the Octelium CLIs; cordium only when requested)")
     ap.add_argument("--check", action="store_true", help="report drift without changing files (exit 1)")

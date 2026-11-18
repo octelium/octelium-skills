@@ -5,6 +5,9 @@ representations; remove `.md` to open the canonical browser page. For discovery 
 map, use the [documentation index](https://octelium.com/docs/cordium/latest/llms.txt).
 The current documentation takes precedence over older skill summaries and source notes.
 
+For a browser tour before installing, the [live demo](https://demo.octelium.com) includes
+Cordium's portal, Workspaces and the built-in Agent.
+
 ## Overview, installation and access
 
 | Need | Documentation |

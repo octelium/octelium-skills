@@ -31,6 +31,11 @@ The helper checks the JSON Schema (unknown fields, enums, one-of choices) and th
 limits, and warns about short Secret references, undefined variables, ignored fields and risky
 settings. Exit status 0 means no errors; review every warning.
 
+Quote string values such as `yes`, `no`, `on` and `off`, including environment and variable
+values. Current Cordium file parsing uses YAML 1.1 boolean conversion; the schema helper's
+loader treats these as strings. Quoting keeps their meaning consistent between the helper
+and the CLI.
+
 A Template spec has `image`, `runtime`, `repository`, `additionalRepositories`, `limit`, `vars`
 and `gitProvider`. A Workspace spec adds `applications` and `isEphemeral` and has no
 `gitProvider`.

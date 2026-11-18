@@ -159,6 +159,25 @@ Session types: `CLIENT` (octelium/octeliumctl) and `CLIENTLESS` (browser, OAuth2
 SDK). States: `ACTIVE`, `PENDING` (awaiting approval), `REJECTED`. Default states and durations
 come from ClusterConfig `spec.session.human|workload` and per-User `spec.session`.
 
+The current Device/Session schemas also describe DeviceManager evidence and posture:
+
+- `Device.status.binding` includes `state`, `validity`, `evidence`, `assurance` and
+  `isOwnerMatched`. Assurance ranges from `OWNER_ONLY` and `IDENTIFIER` to `PROVIDER_ID`,
+  `SIGNED` and `HARDWARE`; owner matching is a separate property. States include
+  `OWNER_MISMATCH`; old `acceptanceMethod`, `expiresAt` and `WAITING_APPROVAL` binding fields
+  or values are no longer in the current schema.
+- `Device.status.posture` uses `osIntegrity` (replacing `mobileIntegrity`), `appControl`,
+  `antivirus`, `tamperProtection`, `agentUpToDate`, normalized `score`, `failingChecks` and
+  `activeThreats`, alongside the existing signals. OS types include `CHROMEOS`.
+- `Session.status.deviceProof` records `type` (`PROBE`, `HARDWARE_KEY`, `VENDOR_SIGNED`),
+  `bindingUID` and `provedAt`. In Policies, binding assurance is capped to what that Session
+  proved; stale or unusable posture is omitted from `ctx.device`. Do not infer effective
+  access from the stored Device alone.
+
+These are server-managed fields. DeviceManager configuration belongs to the Enterprise API;
+check the installed package/Cluster version and current schemas before writing posture rules.
+`octeliumctl update device --approve` approves a Device, not a DeviceManager binding.
+
 ## First admin and retiring the initial token
 
 A new Cluster has a `root` WORKLOAD User and a `root-init` authentication token whose Sessions

@@ -84,6 +84,13 @@ if not path:
         return result, output.getvalue()
 
 class MaintenanceTests(MaintenanceFixture):
+    def test_cli_help_indentation_has_no_tabs_or_trailing_spaces(self) -> None:
+        help_text = "Usage:\n  octelium connect [flags]\n\nFlags:\n  --tunnel-mode string\n  \tWireGuard or QUIC  \n"
+        result = cli.strip_noise(help_text, is_root=False)
+        self.assertNotIn("\t", result)
+        self.assertTrue(all(line == line.rstrip() for line in result.splitlines()))
+        self.assertIn("        WireGuard or QUIC", result)
+
     def test_cli_generation_checks_version_isolation_and_duplicate_outputs(self) -> None:
         self.fake_cli("octops")
         result, output = self.generate("--only", "octops")

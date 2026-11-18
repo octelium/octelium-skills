@@ -83,10 +83,9 @@ cordium delete ws "$ws"
 exit "$rc"
 ```
 
-- The current CLI reference shows `cordium create ws --start -o json` to start and print the
-  created resource. If an installed CLI prints only a notification with `--start`, use
-  separate create/start calls as above. Neither approach waits for readiness; separate calls
-  also let you supply run-only vars.
+- In v0.20.0, `cordium create ws --start -o json` prints only a notification. Use
+  separate create/start calls as above to capture the generated name. Neither approach waits
+  for readiness; separate calls also let you supply run-only vars.
 - After startup, `STOPPED` may mean failure, successful auto-stop, or an explicit stop. Inspect
   `.status.failure` and `.status.stoppingReason`. Logs are unavailable after stop; stream and
   capture them during initialization or while running.

@@ -15,7 +15,7 @@ compatibility: Requires octops and kubectl with admin access to the Kubernetes c
 metadata:
   author: Octelium Labs, LLC
   version: "0.1.0"
-  verified-against: octelium v0.43.0
+  verified-against: octelium v0.51.0
 ---
 
 # Octelium: Cluster operations
@@ -46,9 +46,11 @@ in scope or destructive outcome; an already-authorized upgrade or rotation needs
 3. **Read-only first.** Diagnose with `get`/`describe`/`logs` and `octops upgrade --check`.
    Don't delete pods, restart workloads or edit Octelium-managed Kubernetes objects to "try
    something"; Octelium reconciles its own objects, and manual edits are overwritten or break it.
-4. **Never use `octops init` as a repair.** It wipes the installation (namespace, resource table,
-   Redis data). Never use `octops uninstall` or `kubectl delete ns octelium` unless the user asks
-   to remove the Cluster.
+4. **Never use `octops init` to repair a completed installation.** Since v0.50.0, it refuses an
+   existing Cluster and can resume an interrupted initialization with the same Bootstrap;
+   older versions wipe the namespace and datastores. Diagnose the existing Job and installed
+   version first. Never use `octops uninstall` or `kubectl delete ns octelium` unless the user
+   asks to remove the Cluster.
 5. **Upgrades are one-way in practice.** Take a PostgreSQL backup before upgrading, read the
    release notes, and never downgrade with `--version` unless the release notes allow it.
 6. **Certificates and keys are secrets.** Don't print private keys; show certificate metadata

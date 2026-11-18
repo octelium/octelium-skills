@@ -5,7 +5,7 @@ Docs: https://octelium.com/docs/octelium/latest/install/cluster/bootstrap.md
 The Bootstrap is the only input of `octops init` besides the domain. It is read from
 `--bootstrap <file>` (or `--bootstrap -` for stdin) and stored by `octops init` in the Kubernetes
 Secret `default/octelium-init`. There is no published JSON Schema for it; the field list below
-comes from the `octelium.api.cluster.bootstrap.v1.Config` message (v0.43.0).
+comes from the `octelium.api.cluster.bootstrap.v1.Config` message (v0.51.0).
 
 ## Fields
 
@@ -30,7 +30,7 @@ spec:
       username: <user>           # optional (ACL user)
       password: <password>       # one of password | passwordFromSecret is required
       passwordFromSecret: {name: ..., namespace: ..., key: ...}
-      database: 0                # dedicated index: it is flushed at init
+      database: 0
       isTLS: true
   network:                       # optional
     mode: DUAL_STACK             # DEFAULT (= DUAL_STACK) | DUAL_STACK | V4_ONLY | V6_ONLY
@@ -105,7 +105,8 @@ Create the referenced Kubernetes Secrets without echoing values, e.g. with the u
 kubectl -n octelium-dbs create secret generic octelium-postgres --from-file=password=/dev/stdin
 ```
 
-Don't put the Secrets in the `octelium` namespace: init deletes and re-creates that namespace.
+Keep datastore Secrets in a separate namespace, such as `octelium-dbs`, so they survive an
+Octelium uninstall. Genesis before v0.50.0 also deletes/re-creates `octelium` during init.
 
 ## Version notes
 

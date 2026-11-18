@@ -152,6 +152,36 @@ class ManagementTests(unittest.TestCase):
                 self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertIs(yaml.safe_load("on"), True)
 
+    def test_current_device_and_session_evidence_validate_offline(self) -> None:
+        bodies = [
+            resource("Device", "work-laptop", status={
+                "osType": "CHROMEOS",
+                "binding": {"state": "ACCEPTED", "validity": "VALID", "assurance": "SIGNED",
+                            "evidence": ["PROBE", "VENDOR_SIGNED"], "isOwnerMatched": True},
+                "posture": {"osIntegrity": "PASS", "appControl": "PASS", "antivirus": "PASS",
+                            "score": 97, "failingChecks": 0, "activeThreats": 0}}),
+            resource("Session", "alice-client", status={
+                "deviceProof": {"type": "VENDOR_SIGNED", "bindingUID": "binding-id",
+                                "provedAt": "2026-11-18T12:00:00Z"}}),
+        ]
+        path = self.write_yaml(yaml.safe_dump_all(bodies))
+        result = self.run_script("validate_resources.py", path, "--offline", "--json")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual(json.loads(result.stdout)["errorCount"], 0)
+        self.assertEqual(self.calls(), [])
+
+    def test_retired_device_binding_and_posture_fields_are_rejected(self) -> None:
+        for status in ({"binding": {"acceptanceMethod": "AUTOMATIC"}},
+                       {"binding": {"state": "WAITING_APPROVAL"}},
+                       {"posture": {"mobileIntegrity": "PASS"}}):
+            with self.subTest(status=status):
+                body = resource("Device", "work-laptop", status=status)
+                path = self.write_yaml(yaml.safe_dump(body))
+                result = self.run_script("validate_resources.py", path, "--offline", "--json")
+                self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+                self.assertGreater(json.loads(result.stdout)["errorCount"], 0)
+                self.assertEqual(self.calls(), [])
+
     def test_empty_documents_aliases_and_merge_keys(self) -> None:
         path = self.write_yaml("---\n---\nkind: Group\nmetadata: &meta {name: ops}\nspec:\n  attrs: {copy: *meta}\n")
         docs = load_documents([str(path)])

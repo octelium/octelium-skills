@@ -12,9 +12,9 @@ Docs: https://octelium.com/docs/octelium/latest/user/cli/authentication.md
 | --- | --- | --- |
 | Human on a machine with a browser | `octelium login` (or `--web`) | Opens `https://<DOMAIN>/login`, waits for approval through a local callback. Must be run by the human. |
 | Human on a headless server | Web login cannot complete there. Use an authentication token issued for the User, or connect from a machine with a browser. | Ask an admin for a token if needed. |
-| Workload (server, container, VM) | `OCTELIUM_AUTH_TOKEN` | Token is an authentication-token _Credential_ (`octeliumctl create cred --user <user>`). |
+| Workload (server, container, VM) | `--auth-token-file <path>` / `OCTELIUM_AUTH_TOKEN_FILE` (v0.51.0+), or `OCTELIUM_AUTH_TOKEN` | Token is an authentication-token _Credential_ (`octeliumctl create cred --user <user>`). |
 | Workload with an OIDC identity (Kubernetes SA, GitHub Actions, Azure, generic JWT) | `--assertion <type>[:options]` or `OCTELIUM_AUTH_ASSERTION` | Secretless; needs an `oidcIdentityToken` _IdentityProvider_ and a matching identity on the User. |
-| Short-lived scripts or serverless | `OCTELIUM_ACCESS_TOKEN=<token>` | No login step; the token is used directly. |
+| Short-lived scripts or serverless | `OCTELIUM_ACCESS_TOKEN_FILE=<path>` (v0.51.0+), or `OCTELIUM_ACCESS_TOKEN` | No login step; the token is used directly. |
 | Inside a Cordium sandbox / proxy mode | Nothing to do | `OCTELIUM_AUTH_PROXY_SOCKET` is set; `login` is refused by design. |
 
 ## Commands
@@ -23,6 +23,8 @@ Docs: https://octelium.com/docs/octelium/latest/user/cli/authentication.md
 export OCTELIUM_DOMAIN=example.com            # PowerShell: $env:OCTELIUM_DOMAIN = "example.com"
 
 octelium login                                # browser/IdP (human runs it)
+octelium login --auth-token-file /private/path/token
+octelium connect --auth-token-file /private/path/token
 OCTELIUM_AUTH_TOKEN="$TOKEN" octelium login   # authentication token, kept out of argv
 OCTELIUM_AUTH_TOKEN="$TOKEN" octelium connect # authenticate and connect in one step
 
@@ -37,8 +39,15 @@ octelium status                               # who am I, which Session, Cluster
 octelium logout                               # deletes the Session locally and on the Cluster
 ```
 
+Since v0.51.0, `octelium login`, `octeliumctl login` and `octelium connect` accept
+`--auth-token-file`. `OCTELIUM_AUTH_TOKEN_FILE` also supplies the file for authenticated commands;
+`OCTELIUM_ACCESS_TOKEN_FILE` supplies a static access token without login. Files contain the
+token itself, with surrounding whitespace trimmed; empty files and files over 64 KiB fail.
+Keep token files private (mode 0600 on Unix) and use only one intended authentication method.
+An existing valid Session can be reused instead of authenticating again.
+
 Supply `TOKEN` through a secret store or a private file, not a literal assignment in shell
-history. Prefer the environment variable over `--auth-token`: command-line arguments are
+history. On older clients, use the environment variable. Avoid `--auth-token`: its value is
 visible in the process list and shell history. The agent must not read the token into output.
 
 `--logout` is a global flag that logs out after the command finishes. It is useful in
@@ -48,7 +57,8 @@ Sessions don't accumulate.
 ## Scopes
 
 Scopes voluntarily narrow a Session's permissions below what Policies grant. They only apply
-when authenticating with `--auth-token` or `--assertion`, and they never widen access.
+when authenticating with `--auth-token`, `--auth-token-file` or `--assertion`, and they never
+widen access. They do not re-scope an already authenticated Session or a static access token.
 
 ```bash
 OCTELIUM_AUTH_TOKEN="$TOKEN" octelium login --scope "service:svc1"     # one Service in the default Namespace

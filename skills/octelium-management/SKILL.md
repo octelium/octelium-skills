@@ -16,8 +16,8 @@ compatibility: Requires octeliumctl logged in to the Cluster with API access. He
 metadata:
   author: Octelium Labs, LLC
   version: "0.1.0"
-  verified-against: octelium v0.43.0
-  source-checked: octelium fe628332 (2026-10-05)
+  verified-against: octelium v0.51.0
+  source-checked: octelium f03f2a60, pb fdb688d, octelium-ws 827f4e3 (2026-11-18)
 ---
 
 # Octelium: manage Cluster resources
@@ -38,7 +38,7 @@ superuser, and nothing is reachable unless a Policy allows it.
 
 ## Ground rules
 
-Check the installed CLI's capabilities; the bundled CLI reference is v0.43.0. Follow these
+Check the installed CLI's capabilities; the bundled CLI reference is v0.51.0. Follow these
 rules while preserving the user's authorized target and outcome. Prepare the concrete change
 and preview first; ask only for missing inputs or unresolved destructive scope.
 

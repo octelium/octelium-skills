@@ -10,20 +10,19 @@ import yaml
 
 ROOT = Path(__file__).resolve().parent.parent
 BASE = "/docs/cordium/latest"
-URL_RE = re.compile(r"https://octelium\.com/docs/cordium/latest(?:/[\w./%#~-]*)?")
 
 
 def document(path: Path) -> tuple[dict, str]:
     text = path.read_text(encoding="utf-8")
     if not text.startswith("---\n"):
         return {}, text
-    end = text.find("\n---\n", 4)
-    if end < 0:
+    end = re.search(r"(?m)^---[ \t]*(?:\n|\Z)", text[4:])
+    if end is None:
         raise ValueError(f"{path}: malformed frontmatter")
-    fields = yaml.safe_load(text[4:end])
+    fields = yaml.safe_load(text[4:4 + end.start()])
     if not isinstance(fields, dict):
         raise ValueError(f"{path}: frontmatter must be a mapping")
-    return fields, text[end + 5:]
+    return fields, text[4 + end.end():]
 
 
 def anchors(content: str) -> set[str]:
@@ -42,7 +41,7 @@ def anchors(content: str) -> set[str]:
     return result
 
 
-def routes(docs_dir: Path) -> dict[str, set[str]]:
+def routes(docs_dir: Path, base: str = BASE) -> dict[str, set[str]]:
     result = {}
     paths = sorted(docs_dir.rglob("*.mdx")) + sorted(docs_dir.rglob("*.md"))
     if not paths:
@@ -55,24 +54,25 @@ def routes(docs_dir: Path) -> dict[str, set[str]]:
         parts = list(relative.parent.parts)
         if path.stem != "index":
             parts.append(str(fields.get("id") or path.stem).strip())
-        route = BASE + ("/" + "/".join(parts) if parts else "")
+        route = base + ("/" + "/".join(parts) if parts else "")
         if route in result:
             raise ValueError(f"{path}: duplicate route {route}")
         result[route] = anchors(content)
     return result
 
 
-def validate_links(skill_dir: Path, docs_dir: Path) -> tuple[int, list[str]]:
-    available = routes(docs_dir)
+def validate_links(skill_dir: Path, docs_dir: Path, base: str = BASE) -> tuple[int, list[str]]:
+    available = routes(docs_dir, base)
+    pattern = re.compile(r"https://octelium\.com" + re.escape(base) + r"(?:/[\w./%#~-]*)?")
     errors = []
     checked = 0
     for path in sorted(skill_dir.rglob("*.md")):
         for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
-            for raw in URL_RE.findall(line):
+            for raw in pattern.findall(line):
                 url = raw.rstrip(".,")
                 target = urlsplit(url)
                 route = unquote(target.path).removesuffix(".md").rstrip("/")
-                if route == BASE + "/llms.txt":
+                if route == base + "/llms.txt":
                     continue
                 checked += 1
                 where = f"{path.relative_to(skill_dir)}:{number}"
@@ -81,25 +81,27 @@ def validate_links(skill_dir: Path, docs_dir: Path) -> tuple[int, list[str]]:
                 elif target.fragment and unquote(target.fragment) not in available[route]:
                     errors.append(f"{where}: missing documentation anchor: {url}")
     if checked == 0:
-        errors.append(f"{skill_dir}: no Cordium documentation links found")
+        errors.append(f"{skill_dir}: no {base.split('/')[2].title()} documentation links found")
     return checked, errors
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Check Cordium skill links against a local docs source checkout.")
-    parser.add_argument("--docs-dir", required=True, type=Path, help="directory containing docs/cordium/latest")
-    parser.add_argument("--skill-dir", type=Path, default=ROOT / "skills" / "cordium")
+    parser = argparse.ArgumentParser(description="Check skill links against a local Octelium or Cordium docs source checkout.")
+    parser.add_argument("--docs-dir", required=True, type=Path, help="directory containing docs/<set>/latest")
+    parser.add_argument("--set", choices=("octelium", "cordium"), default="cordium")
+    parser.add_argument("--skill-dir", type=Path)
     args = parser.parse_args()
+    skill_dir = args.skill_dir or (ROOT / "skills" / "cordium" if args.set == "cordium" else ROOT / "skills")
     try:
-        if not args.skill_dir.is_dir():
-            raise ValueError(f"{args.skill_dir}: skill directory does not exist")
-        checked, errors = validate_links(args.skill_dir, args.docs_dir)
+        if not skill_dir.is_dir():
+            raise ValueError(f"{skill_dir}: skill directory does not exist")
+        checked, errors = validate_links(skill_dir, args.docs_dir, f"/docs/{args.set}/latest")
     except (OSError, ValueError, yaml.YAMLError) as error:
         print(f"error: {error}", file=sys.stderr)
         return 2
     for error in errors:
         print(f"error: {error}")
-    print(f"{checked} Cordium documentation links checked: {len(errors)} error(s)")
+    print(f"{checked} {args.set.title()} documentation links checked: {len(errors)} error(s)")
     return 1 if errors else 0
 
 

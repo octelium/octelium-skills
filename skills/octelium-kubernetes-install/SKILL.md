@@ -16,7 +16,7 @@ compatibility: Requires kubectl and octops with cluster-admin access to the targ
 metadata:
   author: Octelium Labs, LLC
   version: "0.1.0"
-  verified-against: octelium v0.43.0
+  verified-against: octelium v0.51.0
 ---
 
 # Octelium: production install on Kubernetes
@@ -40,17 +40,19 @@ Preserve the user's authorized target and outcome across steps. Prepare the Boot
 installation plan before asking for any missing authorization. Ask only for unresolved inputs
 or destructive scope; a request to install on the specified empty cluster covers that install.
 
-1. **`octops init` is destructive for an existing installation.** It deletes and re-creates the
-   `octelium` namespace, and Genesis truncates the `octelium_resources` table and flushes the
-   Redis database it's given. Never run it against a Kubernetes cluster that already has an
-   `octelium` namespace, or with datastores holding another Cluster's data, unless the user asks
-   to wipe and re-create. It isn't a repair or upgrade tool.
+1. **Check the CLI and target version before retrying init.** Since v0.50.0, `octops init`
+   refuses a completed installation and resumes an interrupted initialization with the same
+   domain, Region and Bootstrap without replacing Cluster identity or storage state. Older
+   versions delete/re-create the `octelium` namespace, truncate `octelium_resources` and flush
+   Redis. Inspect the existing Genesis Job and state first; do not bypass identity checks or
+   use init to repair or upgrade a completed Cluster (references/install-and-verify.md).
 2. **No confirmation without a TTY.** `octops init` normally asks for confirmation; from an agent
    shell it proceeds immediately. Check the command, kubecontext and domain against the user's
    authorized installation; a wipe of existing data needs informed authorization of that reset.
 3. **Dedicated datastores.** Use a dedicated PostgreSQL database and a dedicated Redis/Valkey
-   (or at least a dedicated DB index): Genesis flushes the Redis DB. Never point it at a shared
-   cache.
+   (or at least a dedicated DB index). Current Genesis refuses existing resources or storage
+   belonging to another initialization; older versions reset them. Never point it at a shared
+   cache or another Cluster's database.
 4. **Keep credentials out of the Bootstrap file.** Prefer `passwordFromSecret` (Kubernetes
    Secret references) over inline passwords; `octops init` stores the whole Bootstrap in the
    `default/octelium-init` Kubernetes Secret, and files end up in shells, repos and backups.
@@ -69,8 +71,8 @@ or destructive scope; a request to install on the specified empty cluster covers
 
 1. **Discover** (read-only): `kubectl version`, `kubectl get nodes -o wide --show-labels`,
    CNI pods (`kubectl get pods -n kube-system`), container runtime (node `CONTAINER-RUNTIME`
-   column), `kubectl get ns octelium` (must be NotFound), `kubectl get storageclass`, whether a
-   `LoadBalancer` Service gets an external IP on this cluster.
+   column), `kubectl get ns octelium` (inspect any existing installation), `kubectl get storageclass`,
+   whether a `LoadBalancer` Service gets an external IP on this cluster.
 2. **Plan with the user** using references/prerequisites.md: which nodes are Octelium
    data-plane (Gateways, need public reachability on UDP 53820) and control-plane (at least one
    each; 2 vCPU/2 GB per node minimum); Multus install flavor; CNI conf dir; datastores;

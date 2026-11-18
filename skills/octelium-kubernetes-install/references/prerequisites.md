@@ -13,7 +13,8 @@ Docs: https://octelium.com/docs/octelium/latest/install/cluster/pre-install.md
 - The operator needs permission to create cluster-scoped RBAC/CRDs and network attachment resources,
   deploy DaemonSets, and label, annotate and taint nodes. The nodes must allow Octelium's
   networking and filesystem changes; an immutable node OS needs an explicit supported plan.
-- Octelium uses the `octelium` namespace (created by init; an existing one is deleted).
+- Octelium uses the `octelium` namespace. Current init creates it if needed and checks existing
+  installation state; versions before v0.50.0 delete and re-create it.
 - **Node roles** (independent of Kubernetes' own control plane; an Octelium control-plane node is
   an ordinary worker):
 
@@ -42,6 +43,10 @@ directly, so:
   Gateway Agent detects it at startup;
 - the WireGuard kernel module on data-plane nodes is recommended (fallback: wireguard-go);
 - clients need only outbound access.
+
+QUIC DNS records must use each Gateway's `status.hostname`. Since v0.44.0, Gateway and Region
+hostnames use `octelium-gw-` and `octelium-region-` prefixes; older `_gw-` / `_r-` records
+must be updated when upgrading across that release.
 
 ## CNI and Multus
 

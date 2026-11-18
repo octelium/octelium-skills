@@ -23,14 +23,17 @@ kubectl -n octelium logs <pod> --all-containers --tail=200
 | Login: `x509: certificate signed by unknown authority` | Self-signed certificate still active | Install the real certificate (`cert-cluster`). |
 | Login works, tunnels time out | Gateway UDP port blocked, wrong Gateway public IP | Open UDP 53820 (and 8443 for QUIC) to data-plane nodes; check `octeliumctl get gw -o yaml` `publicIPs`; set `octelium.com/override-gw-ip` on NATed nodes and restart the Gateway Agent pod on that node. |
 | Front proxy: redirect loops or 404s | Proxy terminating TLS without front-proxy mode, or forwarding to the wrong port | Front proxy must forward to `octelium-ingress-dataplane.octelium.svc:8080` with `spec.ingress.frontProxy.enable: true` set at init. |
-| An `octelium` namespace already exists before init | A previous installation exists | Stop: init would wipe it. Decide with the user between upgrade (octelium-cluster-ops) and a deliberate reinstall. |
+| An `octelium` namespace already exists before init | Completed or interrupted installation | Inspect the Job and initialization state. v0.50.0+ refuses a completed Cluster and can resume the same interrupted initialization; older versions wipe it. |
+| `Use octops upgrade instead of init` | Current init detected an existing Cluster | Diagnose or upgrade the installed Cluster; do not delete its state to force init. |
+| Bootstrap differs / storage belongs to another initialization | Inputs or datastore identity do not match the checkpoint | Restore the intended original inputs and inspect state; do not reset storage or delete the checkpoint. |
 
 A failed first attempt does not prove that the datastores are empty. Inspect the existing
 namespace, Genesis Job status/logs, datastore identity and any serving resources. Continue
-diagnosing the existing Job instead of launching another init. Even with no namespace, init
-can reset preserved database contents: it truncates the resource table and flushes the configured
-Redis DB. Re-run only for an intended reset after establishing the existing data and required
-backups. After a successful install, use diagnosis or upgrade rather than init to "fix" things.
+diagnosing the existing Job while it is running. With matching v0.50.0+ CLI/Genesis versions
+and an interrupted initialization, resume the same inputs as described in install-and-verify.md.
+Older init can reset preserved database contents even with no namespace: re-run only for an
+intended reset after establishing the data and backups. After a successful install, use
+diagnosis or upgrade to fix the Cluster.
 
 Community support: https://github.com/octelium/octelium/issues (include versions, the Genesis
 logs with secrets redacted, and the Kubernetes distribution/CNI).

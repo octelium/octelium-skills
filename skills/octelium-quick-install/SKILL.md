@@ -16,7 +16,7 @@ compatibility: Target host is a dedicated Linux VM with root, systemd or OpenRC,
 metadata:
   author: Octelium Labs, LLC
   version: "0.1.0"
-  verified-against: install-cluster.sh 2.3, octelium v0.43.0
+  verified-against: install-cluster.sh 2.3 (2026-11-18), octelium v0.51.0
 ---
 
 # Octelium: single-node quick install
@@ -52,17 +52,19 @@ authorization for an existing-data reset separate from a request to install on a
    the `bootstrapped` marker, the `octelium` namespace and the Genesis Job. A re-run skips
    `octops init` only when the marker and namespace both exist and identity checks pass.
    Failure during init, a missing marker after success, or a missing namespace can lead to init
-   again and a datastore reset. Diagnose the existing Job and establish data/backup requirements
-   first (references/recovery-and-removal.md).
+   again. Matching v0.50.0+ CLI/Genesis versions can resume an interrupted initialization with
+   the same inputs and refuse a completed Cluster; older versions reset the datastores.
+   Diagnose the existing Job and establish data/backup requirements first
+   (references/recovery-and-removal.md).
 4. **Destructive options need informed authorization.** Don't add `--force`, `--reset-db`,
    `--uninstall`, `--purge-data` or `-y/--yes` as a troubleshooting step. Explain what each one
    destroys (references/recovery-and-removal.md) and use it only when the user asks for that
    outcome. `-y` answers the installer's own confirmation prompt; use it only for an already
    authorized operation, without asking for another yes to the same outcome.
-5. **A reinstall is a reset.** Any path that runs `octops init` again (after `--uninstall`, after
-   `--reset-db`, when the K3s identity changed) re-creates the Octelium namespace and truncates
-   the Cluster's resource table and Valkey data: Users, Services, Policies and Credentials are
-   gone even if the database directory was kept. Export resources first if they matter.
+5. **A reinstall is not recovery.** `--uninstall` removes Kubernetes state; `--reset-db` starts
+   with an empty database. Current Genesis refuses preserved storage from another
+   initialization; older versions truncate it even when the database directory was kept.
+   Establish backups and the recovery objective before removal or re-bootstrap.
 6. **`--version` is not an upgrade.** On an installed Cluster it only warns. Upgrades use
    `octops upgrade` (octelium-cluster-ops).
 7. **The initial token is a root credential.** Run with `OCTELIUM_SKIP_MESSAGES=true`, passed
@@ -89,7 +91,7 @@ authorization for an existing-data reset separate from a request to install on a
    with `curl -4s https://checkip.amazonaws.com`: if they differ, the host is behind NAT. Stop
    and ask if another Kubernetes or a web server on 443 is present. For an existing
    `/etc/octelium/installer`, follow the recovery reference to establish whether resuming
-   will skip init or reset data.
+   will skip init, resume an interrupted initialization or refuse existing state.
 3. **Open the cloud firewall / security group** (the installer can't): TCP `443` (Ingress),
    UDP `53820` (WireGuard), plus UDP `8443` with `--quicv0`. TCP `80` optional.
 4. **Fetch and inspect:**
@@ -106,8 +108,9 @@ authorization for an existing-data reset separate from a request to install on a
    `octops cert <DOMAIN> --cert fullchain.pem --key privkey.pem --kubeconfig /etc/rancher/k3s/k3s.yaml`.
    Details and renewal automation: references/post-install.md.
 8. **First login** from the user's own machine:
-   supply the token from `/etc/octelium/installer/init-token` through `OCTELIUM_AUTH_TOKEN`, then
-   run `octelium login --domain <DOMAIN>` (post-install reference; the user runs it).
+   transfer `/etc/octelium/installer/init-token` privately, then run
+   `octelium login --domain <DOMAIN> --auth-token-file <private-file>` with v0.51.0+
+   (post-install reference; the user runs it). Older clients use `OCTELIUM_AUTH_TOKEN`.
    Before the real certificate is installed this fails TLS verification;
    `OCTELIUM_INSECURE_TLS=true` works for that single command.
 9. **Next steps:** create named admins and an IdentityProvider, then retire `root-init`
@@ -128,4 +131,5 @@ authorization for an existing-data reset separate from a request to install on a
    versions; this skill was written against installer 2.3).
 2. Docs: https://octelium.com/docs/octelium/latest/overview/quick-install.md, and
    https://octelium.com/docs/octelium/latest/llms.txt for anything newer.
+   For a browser tour before installing, use https://demo.octelium.com.
 3. The bundled references.

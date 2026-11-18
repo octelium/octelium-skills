@@ -51,6 +51,8 @@ jq '.definitions["octelium.api.main.core.v1.Service.Spec"].properties.mode.enum'
   (`ctx.service.metadata.name == "web.production"`).
 - A Service named `default` in a Namespace (`default.production`) additionally answers at
   `production.local.<DOMAIN>`.
+- Since v0.44.0, Service names starting with `octelium` are reserved for the Cluster. Read
+  generated Gateway and Region hostnames from status rather than constructing them.
 - DNS: private `<svc>.<ns>.local.<DOMAIN>` (default Namespace also `<svc>.local.<DOMAIN>`);
   public (when `isPublic`) `<svc>.<ns>.<DOMAIN>` (default Namespace also `<svc>.<DOMAIN>`).
 

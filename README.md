@@ -6,6 +6,9 @@ on it. They teach AI coding agents (Claude Code, OpenAI Codex, and any agent tha
 Agent Skills format) to install, operate, manage and use Octelium Clusters and Cordium Workspaces
 correctly and safely.
 
+Explore the login page, Portal, Enterprise console and Cordium in the
+[live demo](https://demo.octelium.com) before installing a Cluster.
+
 ## Skills
 
 | Skill | Use it to | Main tools |
@@ -66,20 +69,20 @@ The management and Cordium helper scripts need Python 3.9+ with `pyyaml` and `js
   1k to 2k tokens): scope and hand-offs, ground rules, the workflow, and a routing table to reference
   files that agents load only when needed.
 - **Verified against the implementation.** Behaviors were checked against the Octelium source and
-  v0.43.0 binaries, not only the prose docs. Examples: `octeliumctl apply` replaces whole resources;
+  v0.51.0 release binaries, not only the prose docs. Examples: `octeliumctl apply` replaces whole resources;
   `apply --prune` deletes missing resources of *every* included kind (including
-  the built-in `root` User, `root-init` Credential and `allow-all` Policy); `octops init` deletes an
-  existing `octelium` namespace and wipes the datastores it is given; `octops` confirmation prompts
+  the built-in `root` User, `root-init` Credential and `allow-all` Policy); since v0.50.0,
+  `octops init` resumes an interrupted initialization with the same inputs and refuses a completed
+  Cluster (older versions reset the namespace/datastores); `octops` confirmation prompts
   are skipped when there is no TTY; web login blocks waiting for a browser. Cordium follows its
   current documentation, with a task index linking configuration pages and worked examples,
   CLI workflows, SDK guidance and the built-in Agent. `cordium` drops
   unknown YAML fields silently, spec references such as `fromSecret` need full
   `<name>.<space>.<owner>` names, `cordium man apply` replaces the whole ClusterConfig spec, and
-  `cordium ssh`/`cp` need an `octelium connect` tunnel. The bundled v0.15.0 help is retained only
-  as an offline reference for that older CLI.
+  `cordium ssh`/`cp` need an `octelium connect` tunnel. The bundled v0.20.0 help includes
+  Volumes, snapshots and `cordium code`.
 - **Native checks and supporting tools.** Prefer `octeliumctl validate` and
-  `octeliumctl apply --dry-run` when the installed CLI supports them. Both were confirmed in
-  Octelium source on 5 October 2026; the installed v0.43.0 binary lacks them. Validation is
+  `octeliumctl apply --dry-run` (v0.44.0+); older clients use the helpers below. Validation is
   local; dry-run reads current state without mutations and does not guarantee server acceptance.
   `octelium-management` also ships
   `scripts/validate_resources.py` (validates YAML against the published JSON Schemas; `apply` only
@@ -95,6 +98,9 @@ The management and Cordium helper scripts need Python 3.9+ with `pyyaml` and `js
   structure; the docs indexes `https://octelium.com/docs/octelium/latest/llms.txt` and
   `https://octelium.com/docs/cordium/latest/llms.txt` (every page has a `.md` twin) for current
   behavior; the bundled references as an offline snapshot.
+  For product overviews and comparisons, use `https://octelium.com/llms.txt` and
+  `https://octelium.com/solutions/llms.txt`. Product, solution and blog pages also have Markdown
+  alternates (`<page-url>.md`, `/index.md` for the homepage), or accept `Accept: text/markdown`.
 - **Safety rules, not a security boundary.** The skills keep agents conservative (no access
   broadening to "fix" denials, no secrets in arguments or unprotected files, explicit consent
   for destructive flags, no interactive logins run by the agent). What an agent can actually do is decided by
@@ -107,7 +113,8 @@ The management and Cordium helper scripts need Python 3.9+ with `pyyaml` and `js
   manifests are retained. Installation doesn't log in to an Octelium Cluster.
 - The skill bundle is versioned independently of Octelium (semver, see [CHANGELOG.md](CHANGELOG.md)).
 - Each skill records what it was verified against in `metadata.verified-against`
-  (currently Octelium v0.43.0, quick installer 2.3 and Cordium v0.15.0). Newer versions are
+  (currently Octelium v0.51.0, quick installer 2.3 and Cordium v0.20.0, with docs/schemas checked
+  on 18 November 2026). Newer versions are
   expected to work; version-specific behavior is called out in the references.
 - The generated CLI references (`references/cli-*.md`) and the JSON Schema snapshots are refreshed
   per Octelium release (per Cordium release for `cordium`); a weekly CI job reports drift.
@@ -135,6 +142,8 @@ python3 scripts/generate_plugin_manifests.py [--check]
 python3 scripts/generate_cli_reference.py --bin-dir <dir-with-release-binaries> --version vX.Y.Z
 python3 scripts/generate_cli_reference.py --bin-dir <dir> --version <cordium-version> --only cordium
 scripts/sync_schemas.sh [--check] [--set octelium|cordium]   # refresh/check the bundled JSON Schemas
+python3 scripts/validate_cordium_docs.py --set octelium --docs-dir <docs/octelium/latest>
+python3 scripts/validate_cordium_docs.py --docs-dir <docs/cordium/latest>
 claude plugin validate --strict .                   # Claude Code manifest checks
 claude plugin eval . --no-publish --runs 3 --max-cost-usd 5
 ```

@@ -22,8 +22,17 @@ docker run -e OCTELIUM_DOMAIN=<DOMAIN> -e OCTELIUM_AUTH_TOKEN \
   ghcr.io/octelium/octelium connect -p svc1:8080 -p svc2:8081
 ```
 
-Pass the token through the environment (`-e OCTELIUM_AUTH_TOKEN` copies it from the caller's
-environment) or a secret mechanism, not as `--auth-token` on the command line. Rootless
+Since v0.51.0, a read-only mounted token file can be used directly:
+
+```bash
+docker run --mount type=bind,src=/private/path/token,dst=/run/secrets/octelium-token,readonly \
+  -e OCTELIUM_DOMAIN=<DOMAIN> -e OCTELIUM_AUTH_TOKEN_FILE=/run/secrets/octelium-token \
+  ghcr.io/octelium/octelium connect -p svc1:8080
+```
+
+Use a private source file readable by the container's user. Older clients can receive the token
+through the environment (`-e OCTELIUM_AUTH_TOKEN` copies it from the caller's environment) or a
+secret mechanism. Avoid `--auth-token` on the command line. Rootless
 containers with user-namespaced `NET_ADMIN` work as well. Inside containers the local DNS
 server is used by default.
 
@@ -99,7 +108,7 @@ steps:
       #   postgres.db:5432
       # serve: |                        # serve Services from the runner
       #   preview-app
-      # version: "0.43.0"               # pin the client
+      # version: "0.51.0"               # pin the client
   - run: curl http://demo-nginx
   - if: always()
     uses: octelium/github-action@v2
@@ -133,9 +142,19 @@ Docs: https://octelium.com/docs/octelium/latest/management/guide/service/devops/
 ## Headless Linux servers (systemd)
 
 `octelium connect -d` starts a transient `systemd-run` unit as root with
-`Restart=on-failure`. For a permanent service, use the packaged daemon or a unit that runs
-`octelium connect` with `OCTELIUM_DOMAIN` and `OCTELIUM_AUTH_TOKEN` supplied from a root-only
-environment file. Don't write tokens into world-readable unit files.
+`Restart=on-failure`. With v0.51.0+ and systemd v236+, the unit is
+`octelium-connect-<domain>.service`. For a permanent service, use the packaged daemon or a unit
+that runs `octelium connect` with `OCTELIUM_DOMAIN` and a root-only mounted token file through
+`OCTELIUM_AUTH_TOKEN_FILE` (v0.51.0+). Older clients can use `OCTELIUM_AUTH_TOKEN` from a
+root-only environment file. Don't write tokens into world-readable unit files.
+
+## NixOS
+
+The Octelium installer uses `nix profile install github:octelium/nix` on NixOS when no version
+or custom install directory is set and package-manager installation is enabled. Updates then
+use the Nix profile. For the Desktop app, follow the
+[NixOS module instructions](https://github.com/octelium/nix#nixos) and enable
+`programs.octelium-desktop.enable`; the CLI installer does not configure that module.
 
 ## Hygiene for ephemeral runners
 

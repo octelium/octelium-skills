@@ -67,8 +67,10 @@ message in the terminal and install log; don't read raw logs into the transcript
 - The user runs the login on their own machine (install the CLI there first:
   `curl -fsSL https://octelium.com/install.sh | bash`). Transfer the token privately into a
   mode-0600 file on that machine. The user runs
-  `OCTELIUM_AUTH_TOKEN="$(cat /private/path/init-token)" octelium login --domain <DOMAIN>`,
-  then removes the local copy. Don't paste it into chat, tickets, or command-line arguments.
+  `octelium login --domain <DOMAIN> --auth-token-file /private/path/init-token` (v0.51.0+),
+  then removes the local copy. Older clients use
+  `OCTELIUM_AUTH_TOKEN="$(cat /private/path/init-token)" octelium login --domain <DOMAIN>`.
+  Don't paste it into chat, tickets, or command-line arguments.
 - Before step 2 is done, login fails with `x509: certificate signed by unknown authority`;
   prefix that one command with `OCTELIUM_INSECURE_TLS=true` if the user wants to continue now.
 - This token belongs to the `root` User through the `root-init` Credential (valid about six

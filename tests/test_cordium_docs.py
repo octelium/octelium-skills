@@ -64,6 +64,24 @@ class CordiumDocumentationTests(unittest.TestCase):
         self.write_links("use/cli.md")
         self.assertEqual(len(docs.validate_links(self.skill, self.source)[1]), 1)
 
+    def test_frontmatter_can_end_at_the_end_of_a_file(self) -> None:
+        self.write_doc("use/index.mdx", "---\nid: use\n---")
+        self.write_links("use")
+        self.assertEqual(docs.validate_links(self.skill, self.source), (1, []))
+
+    def test_octelium_links_use_the_selected_routes_and_anchors(self) -> None:
+        self.write_doc("user/cli/login.mdx", "---\nid: authentication\n---\n## Authentication Token\n")
+        (self.skill / "SKILL.md").write_text(
+            "https://octelium.com/docs/octelium/latest/user/cli/authentication.md#authentication-token\n"
+            "https://octelium.com/docs/cordium/latest/use/cli.md\n"
+            "https://octelium.com/docs/octelium/latest/llms.txt\n")
+        self.assertEqual(docs.validate_links(self.skill, self.source, "/docs/octelium/latest"), (1, []))
+        with (self.skill / "SKILL.md").open("a") as stream:
+            stream.write("https://octelium.com/docs/octelium/latest/user/cli/login.md\n")
+        checked, errors = docs.validate_links(self.skill, self.source, "/docs/octelium/latest")
+        self.assertEqual((checked, len(errors)), (2, 1))
+        self.assertIn("SKILL.md:4: missing documentation page", errors[0])
+
     def test_indexes_and_other_products_are_not_checked_as_pages(self) -> None:
         self.write_doc("use/cli.mdx", "## CLI\n")
         self.write_links("use/cli.md", "llms.txt")

@@ -15,17 +15,20 @@ The Cluster has no superuser; API access comes only from Policies. Options, in o
      token_file="$(mktemp /secure/path/init-token.XXXXXX)"
      trap 'rm -f "$token_file"' EXIT
      kubectl -n octelium get secret init-token -o jsonpath='{.data.data}' | base64 -d > "$token_file"
-     OCTELIUM_AUTH_TOKEN="$(cat "$token_file")" octelium login --domain <DOMAIN>
+     octelium login --domain <DOMAIN> --auth-token-file "$token_file"
    )
    ```
 
-   The user runs this in Bash with an existing private `/secure/path` directory. Permissions
+   The user runs this with a v0.51.0+ client in Bash and an existing private `/secure/path`
+   directory. Permissions
    are set before capture; producer failure stops login, and the temporary copy is removed on
    exit. Quick-install hosts also keep it at `/etc/octelium/installer/init-token`. For login from
    another machine, transfer the token privately to a mode-0600 file there, supply it through
-   `OCTELIUM_AUTH_TOKEN` and remove the local copy. Don't read its contents into the transcript.
+   `--auth-token-file` and remove the local copy. Older clients use `OCTELIUM_AUTH_TOKEN` for
+   login. Don't read its contents into the transcript.
 3. **Neither available:** there is no documented recovery command. Don't edit the PostgreSQL
-   database or Octelium's Kubernetes objects by hand, and don't reinstall (that wipes everything).
+   database or Octelium's Kubernetes objects by hand, and don't reinstall: it removes
+   Kubernetes state and does not restore preserved datastores.
    Collect the facts and ask upstream: https://github.com/octelium/octelium/issues or the
    community channels linked from https://octelium.com.
 

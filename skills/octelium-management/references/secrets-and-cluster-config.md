@@ -63,6 +63,7 @@ Sections:
 | --- | --- |
 | `spec.session.human` / `spec.session.workload` | `clientDuration`, `clientlessDuration`, `accessTokenDuration`, `refreshTokenDuration`, `maxPerUser`, `defaultState` (`ACTIVE`/`PENDING`/`REJECTED`) |
 | `spec.device.human` / `spec.device.workload` | `maxPerUser`, `defaultState` for newly registered Devices |
+| `spec.device.probing.isDisabled` | Disable running Device Probes; changes Device evidence collection |
 | `spec.authorization` | Global `policies` and `inlinePolicies`, evaluated for every request |
 | `spec.authentication.geolocation.mmdb` | MaxMind MMDB database (`upstream.url` or `fromConfig`) for GeoIP data in Sessions |
 | `spec.authenticator` | Authenticator (MFA/passkey) behavior; see the Authenticators docs page and the schema |
@@ -78,3 +79,24 @@ Impact notes:
   an admin path (e.g. a higher-priority ALLOW for the admin Group) and preview carefully.
 - Shorter Session durations take effect at the next refresh.
 - `useForwardedForHeader` without a trusted front proxy lets clients spoof their IP (and GeoIP).
+
+## DNS zones (v0.44.0+)
+
+`spec.dns.zones` routes selected domains and their subdomains to their own upstream DNS
+servers; the longest matching domain wins. Other queries use `fallbackZone`. For example,
+edit the exported ClusterConfig to add:
+
+```yaml fragment
+dns:
+  fallbackZone:
+    servers: [8.8.8.8, 1.1.1.1]
+  zones:
+    - domains: [corp.example.com, internal.example.com]
+      servers: [10.0.0.53, tls://dns.corp.example.com]
+      cacheDuration:
+        minutes: 1
+```
+
+These servers must be reachable from the Cluster DNS server. Since v0.49.0, it respects
+upstream TTLs, resets its cache on configuration changes, retries other upstreams on failure
+and retries truncated UDP responses over TCP.

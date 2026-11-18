@@ -6,16 +6,17 @@ description: >-
   connect` (detached, rootless, `-p` publishing Services to localhost, `--serve` to host Services,
   embedded SSH/SOCKS5, QUIC), reaching Services by name or FQDN (HTTP, SSH, PostgreSQL, MySQL,
   Kubernetes via `octelium config`), `octelium ssh`/`cp`, running the client in Docker, Kubernetes
-  or CI, and fixing login, tunnel and DNS failures. Use when someone wants to access, connect to
+  or CI, browser access through the web Portal and Desktop app, and fixing login, tunnel and
+  DNS failures. Use when someone wants to access, connect to
   or serve through Octelium. Not for creating Services, Users or Policies (octelium-management)
   or for installing/operating a Cluster (octelium-quick-install, octelium-kubernetes-install,
   octelium-cluster-ops).
 license: Apache-2.0
-compatibility: Requires the octelium CLI and outbound HTTPS/UDP to the Cluster. Detached mode on Linux needs sudo and systemd.
+compatibility: CLI workflows require octelium and outbound HTTPS/UDP to the Cluster. Detached mode on Linux needs sudo and systemd. Browser access needs HTTPS; browser terminals require Cordium.
 metadata:
   author: Octelium Labs, LLC
   version: "0.1.0"
-  verified-against: octelium v0.43.0
+  verified-against: octelium v0.51.0
 ---
 
 # Octelium: connect and access Services
@@ -28,7 +29,7 @@ lets the machine reach, publish or serve _Services_. A Cluster is addressed by i
 
 - **Use for:** CLI installation, login/logout, `connect`/`disconnect`, reaching Services,
   publishing (`-p`) and serving (`--serve`, `--serve-all`, `--essh`, `--esocks5`), client
-  containers/sidecars/CI, and client-side troubleshooting.
+  containers/sidecars/CI, browser/desktop Service discovery, and client-side troubleshooting.
 - **Hand off:** a missing Service or a denied request that needs a _Policy_ change →
   **octelium-management**. Cluster unreachable because of DNS records, TLS certificates or
   Cluster health → **octelium-cluster-ops**. No Cluster exists yet → an install skill.
@@ -50,7 +51,8 @@ lets the machine reach, publish or serve _Services_. A Cluster is addressed by i
 3. **Proxy mode:** if `OCTELIUM_AUTH_PROXY_SOCKET` is set (for example inside a Cordium
    sandbox), the CLI is already authenticated through a local proxy; `login` is refused by
    design. Don't run `login` or `logout` there.
-4. **Treat tokens as secrets.** Pass them through `OCTELIUM_AUTH_TOKEN` or a secret store,
+4. **Treat tokens as secrets.** Use `--auth-token-file` / `OCTELIUM_AUTH_TOKEN_FILE` on
+   v0.51.0+, or `OCTELIUM_AUTH_TOKEN` / a secret store on older clients;
    never echo them into logs, commit them, or paste them back in full. Don't log out or
    delete a Session unless asked; that ends the user's access.
 5. **Keep exposure minimal.** Publish to loopback (the default) unless the user asks for
@@ -65,12 +67,17 @@ lets the machine reach, publish or serve _Services_. A Cluster is addressed by i
 
 1. **Establish context.** Domain; OS; privileges (root/sudo or none); interactive desktop,
    headless server, container, or CI; whether proxy mode is active.
+   For browser or Desktop app access, use references/accessing-services.md; the steps below
+   cover the CLI workflow.
 2. **Check the CLI.** `octelium version` (add `--check` to compare with the latest release).
    Install if missing:
    - Linux/macOS: `curl -fsSL https://octelium.com/install.sh | bash`
      (`VERSION=vX.Y.Z`, `INSTALL_DIR=...`, `USE_SUDO=false` are supported env vars)
    - Windows PowerShell: `iwr https://octelium.com/install.ps1 -useb | iex`
    - Homebrew: `brew install octelium/tap/octelium`; Chocolatey: `choco install octelium`
+   - NixOS: with no version/custom directory and package-manager installation enabled,
+     the installer uses `nix profile install github:octelium/nix`;
+     updates are managed by Nix (references/automation.md).
    - Container: `ghcr.io/octelium/octelium`
    The installers ship all three CLIs: `octelium`, `octeliumctl`, `octops`.
 3. **Reuse valid access, or authenticate when needed** with the right method → references/authentication.md.
@@ -117,7 +124,7 @@ Read only the file the task needs:
 | --- | --- |
 | Login methods, workload auth, scopes, devices, authenticators, logout | [references/authentication.md](references/authentication.md) |
 | `connect` modes, DNS options, implementations, IP/tunnel modes, serve, eSSH/eSOCKS5, env vars | [references/connecting.md](references/connecting.md) |
-| Addressing Services, per-protocol clients, `octelium config`, `ssh`, `cp`, clientless/OAuth2 | [references/accessing-services.md](references/accessing-services.md) |
+| Addressing Services, type filters, per-protocol clients, `octelium config`, `ssh`, `cp`, browser/desktop, clientless/OAuth2 | [references/accessing-services.md](references/accessing-services.md) |
 | Docker, Kubernetes sidecars, Helm, GitHub Actions, headless servers | [references/automation.md](references/automation.md) |
 | Error messages and fixes | [references/troubleshooting.md](references/troubleshooting.md) |
 | Agent timeouts, background process ownership, cleanup, Claude Code terminal adapter | [references/agent-execution.md](references/agent-execution.md) |

@@ -14,9 +14,9 @@ octeliumctl validate --help
 octeliumctl apply --help
 ```
 
-The installed v0.43.0 CLI lacks `validate` and `apply --dry-run`. Both exist in Octelium source
-checked on 5 October 2026; use them when the installed CLI supports them. The generated CLI
-reference remains a verified v0.43.0 snapshot.
+`validate` and `apply --dry-run` are available since v0.44.0 and are included in the bundled
+v0.51.0 CLI reference. Prefer them when the installed CLI supports them; v0.43.0 and older
+clients need the helper workflow below.
 
 `validate <paths>` checks parsing, unknown fields, enum values, field types, kinds and duplicate
 resources locally. It does not contact the Cluster or validate references and server semantics.

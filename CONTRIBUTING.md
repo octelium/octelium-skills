@@ -117,16 +117,17 @@ CLI generation verifies the binary's reported version and every help command bef
 any requested output. New snapshots record the executable hash, command count and generator
 version; both octops copies must agree. `--check` reports drift without writing references.
 
-When Cordium documentation changes, check the skill's page and section links against the
+When Octelium or Cordium documentation changes, check the skills' page and section links against the
 current docs source checkout. Routes use page frontmatter IDs, which can differ from filenames:
 
 ```bash
+python3 scripts/validate_cordium_docs.py --set octelium --docs-dir /path/to/app/docs/octelium/latest
 python3 scripts/validate_cordium_docs.py --docs-dir /path/to/app/docs/cordium/latest
 scripts/sync_schemas.sh --set cordium --from /path/to/app/schemas/cordium/latest
 ```
 
-The link check runs offline and requires PyYAML. It checks Cordium documentation URLs in the
-skill's Markdown files, including section anchors, without depending on a live website.
+The link check runs offline and requires PyYAML. It checks the selected product's documentation
+URLs in the skills' Markdown files, including section anchors, without depending on a live website.
 Use the documentation map to route tasks to current pages and worked examples; keep the
 generated CLI help explicitly scoped to its recorded version.
 

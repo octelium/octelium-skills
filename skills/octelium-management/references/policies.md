@@ -84,7 +84,7 @@ rules beat matching `IGNORE` rules.
 | `ctx.device` | Device, when registered: e.g. `status.osType` (`WINDOWS`, ...) |
 | `ctx.service` | Service: `metadata.name` (`svc.ns` form), `spec.mode`, `spec.attrs`, `status.namespaceRef.name` |
 | `ctx.namespace` | Namespace: `metadata.name`, `spec.attrs` |
-| `ctx.request.http` | `method`, `path`, `uri`, `host`, `scheme`, `headers["x"]`, `queryParams.x`, `body` (bytes: `string(...)`), `bodyMap` (parsed JSON) |
+| `ctx.request.http` | `method`, `path`, `uri`, `host`, `scheme`, `headers["x"]`, `queryParams.x`, `body` (bytes: `string(...)`), `bodyMap` (parsed JSON), `isBodyOmitted` |
 | `ctx.request.grpc` | `service`, `serviceFullName`, `package`, `method`, `http.*` |
 | `ctx.request.kubernetes` | `verb`, `apiGroup`, `apiVersion`, `namespace`, `resource`, `subresource`, `name`, `http.*` |
 | `ctx.request.ssh.connect` | `user` |
@@ -97,6 +97,11 @@ rules beat matching `IGNORE` rules.
 Only the sub-object for the Service's mode is populated. Check the mode's doc page ("Access
 Control" section) and the Policy/Service schemas before relying on a field; this table is a
 summary, not a contract.
+
+Current HTTP request contexts set `isBodyOmitted` when the body is too large to include in
+`body` / `bodyMap`. Body-dependent Policy conditions then match DENY rules and do not match
+ALLOW rules. Don't treat an omitted body as an empty or validated payload; inspect this flag
+when a body-based rule denies a large request.
 
 ## Recipes
 

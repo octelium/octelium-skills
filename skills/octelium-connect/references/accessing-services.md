@@ -7,6 +7,7 @@ Docs: https://octelium.com/docs/octelium/latest/user/cli/access.md
 ```bash
 octelium get svc                     # Services visible to you (alias: service, services)
 octelium get svc -n production       # filter by Namespace
+octelium get svc --type postgres
 octelium get svc -o yaml             # full detail (-o json for jq)
 octelium get ns                      # Namespaces
 octelium get svc --order-by-name --items-per-page 50 --page 2
@@ -14,6 +15,10 @@ octelium get svc --order-by-name --items-per-page 50 --page 2
 
 The table shows NAME, NAMESPACE, PORT, TYPE (mode), ADDRESSES (private IPv4/IPv6), TLS and
 PUBLIC. Use these values; don't guess ports or modes.
+
+`--type` (v0.50.0+) accepts a Service mode case-insensitively, such as `postgres`, `ssh`, `web`,
+`mcp` or `llm`; it can be combined with `--namespace`. It belongs to `octelium get service`,
+not `octeliumctl get service`.
 
 ## Addressing
 
@@ -71,6 +76,9 @@ octelium cp sessA:/data.json sessB:/data.json      # session to session
 Listing Sessions needs `octeliumctl` and a Policy that allows it. The caller must be connected
 (or reach the Cluster otherwise) and be authorized by the Cluster's Policies.
 
+Since v0.51.0, embedded SSH supports SFTP as the selected OS user when the serving client runs
+as root with `--essh-user <user>`. `octelium cp` uses that SFTP path.
+
 For a host running `--esocks5`, the SOCKS5 username is the Session name:
 `curl --socks5 usr1-9o2ztp@socks5.octelium:1080 https://checkip.amazonaws.com`; traffic exits
 from that host.
@@ -92,3 +100,19 @@ and the HTTP-based `MCP`/`LLM` modes):
 - **Go:** the `octelium-go` SDK (https://octelium.com/docs/octelium/latest/management/guide/sdk.md).
 
 Docs: https://octelium.com/docs/octelium/latest/user/clientless/oauth2.md
+
+## Browser and desktop access
+
+The [web Portal](https://octelium.com/docs/octelium/latest/user/web-portal.md) at
+`https://portal.<DOMAIN>` lists Services and Namespaces. With Cordium installed, **Connect**
+opens a browser terminal in a remote Cordium sandbox for SSH, PostgreSQL, HTTP and other
+Service clients. This uses the User's authorized access; it does not require making the
+Service public. **Open** follows a Service's public URL when available.
+
+The [Desktop app](https://octelium.com/docs/octelium/latest/user/desktop.md) provides login,
+tunnel connections and Service discovery on Linux, macOS and Windows. Follow its current
+documentation for installation and early-access limitations. Browser and desktop login need
+the human at that machine.
+
+For a product tour before installing a Cluster, the [live demo](https://demo.octelium.com)
+includes the login page, Portal, Enterprise console and Cordium.

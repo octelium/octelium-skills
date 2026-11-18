@@ -20,6 +20,10 @@ domain, firewall and DNS with the octelium-quick-install skill; the Cordium-spec
 | `--cordium-version <v>` | Package version (default: `--version`, else latest). Needs `--cordium`; doesn't upgrade an installed package. |
 | `--longhorn` | Installs Longhorn (default StorageClass `longhorn`), the CSI snapshot CRDs and controller, and the default VolumeSnapshotClass `longhorn-snapshot-vsc`. Needs an ext4 or XFS data filesystem and iSCSI/NFS client packages (installed unless `--no-install-deps`). PostgreSQL stays on its local volume. |
 
+Cordium releases are versioned separately from Octelium. When pinning `--version`, also choose
+`--cordium-version` explicitly; an Octelium release such as v0.51.0 is not a Cordium package
+version (the current Cordium snapshot is v0.20.0).
+
 ```bash
 curl -fsSL -o install-cluster.sh https://octelium.com/install-cluster.sh
 bash install-cluster.sh --help

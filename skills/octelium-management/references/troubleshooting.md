@@ -34,6 +34,10 @@ Docs: https://octelium.com/docs/octelium/latest/management/core/visibility.md
 - Every Service emits OpenTelemetry access logs (`kind: AccessLog`) with the Session/User/
   Device, the Service/Namespace, L7 details, `status` (`ALLOWED`/`DENIED`) and
   `reason.details.policyMatch` (the Policy or inline Policy that decided).
+- Since v0.49.0, `entry.common.network` records `downstream`, `upstreamLocal` and
+  `upstreamRemote` IP/port pairs and `forwardedClientIP` where available. TCP logs add a
+  `CONNECTED` event after upstream connection succeeds; PostgreSQL start entries add
+  `backendPID`. Use these to distinguish an allowed request from a successful upstream connection.
 - Logs and metrics are exported to an OTLP gRPC receiver that must be reachable as the
   Kubernetes Service `octelium-collector` in the `octelium` namespace on port `8080`. Without it,
   nothing is stored. Deploying the collector (e.g. the OpenTelemetry Helm chart with

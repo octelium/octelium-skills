@@ -17,10 +17,15 @@ Bootstrap Secret. Establish what data exists and which backup meets the recovery
 - **Marker and namespace present:** if installer identity checks pass, re-running skips init.
   Resume with the same inputs and `OCTELIUM_SKIP_MESSAGES=true`.
 - **Failure during init, missing marker or missing namespace:** re-running can invoke init,
-  truncate the resource table and flush Valkey. Inspect Genesis status/logs and any serving
-  resources first; a successful Job without an installer marker is not permission to reset it.
-  Diagnose the existing installation/Job. Run init again only for an intended reset after
-  establishing the data and backup requirements; a failed first command does not prove emptiness.
+  so check the installed `octops` version and target Genesis version. With v0.50.0+ on both,
+  the same interrupted initialization can resume with unchanged domain, Bootstrap, external-IP
+  settings and datastore credentials, preserving identity and storage. Inspect the existing
+  Job first; don't start another operation while it is running. Older versions truncate the
+  resource table and flush Valkey: re-run only for an intended reset after establishing backups.
+- **Job succeeded but the installer marker is missing:** current init refuses a completed
+  Cluster. The installer removes its local init-token file before calling init, so don't
+  retry blindly or edit the marker to bypass checks. Diagnose the installer state and recover
+  access from the Kubernetes `init-token` Secret if needed; keep the original state private.
 
 ## Common errors
 
@@ -35,7 +40,7 @@ Bootstrap Secret. Establish what data exists and which backup meets the recovery
 | `could not detect a public IPv4 address; pass it explicitly with --public-ip (or use --nat)` | No outbound access to IP echo services, or no public IP | Pass `--public-ip`, or `--nat` if the machine is behind NAT. |
 | `an existing K3s installation was found that this installer does not own` | K3s installed by something else | Prefer a clean host. `--force` adopts it: only with the user's agreement, knowing the installer will then manage and can uninstall it. |
 | `this installer manages a dedicated single-node Cluster; N nodes were found` | Multi-node K3s | Use octelium-kubernetes-install instead. |
-| `the running Cluster is not the one this installer previously managed` | K3s was reinstalled outside the installer | Investigate. `--force` accepts the new cluster and **re-bootstraps** (resource reset). |
+| `the running Cluster is not the one this installer previously managed` | K3s was reinstalled outside the installer | Investigate. `--force` accepts the new cluster and tries to re-bootstrap; current Genesis refuses preserved storage from another initialization, while older versions reset it. |
 | `<db-dir> contains data this installer did not create` (mentions migrating from the Bitnami-based installer) | Non-empty directory without the marker | Back it up. Then either choose a new `--db-dir` or, if the user accepts losing it, `--reset-db` (moves it aside). |
 | `<db-dir> belongs to Octelium domain X` / `holds PostgreSQL N data` / `created for UID ...` | Marker mismatch | Use matching settings or a different `--db-dir`. Don't edit the marker. |
 | `an existing PostgreSQL data directory was found but its password is not recoverable` | State dir lost, data kept | Restore `/etc/octelium/installer/postgres-password` from backup; otherwise `--reset-db` (data loss). |
@@ -72,11 +77,12 @@ Keep raw historical logs private; review other sensitive diagnostics locally bef
 | `--uninstall --purge-data` | Everything above plus the database directory and `/etc/octelium/installer` (credentials, initial token) | Permanent removal. Irreversible. |
 | `-y` | Skips the confirmation prompt | Only for the target and destructive outcome the user already authorized; no repeated confirmation is needed. |
 
-### Reinstalling means resetting Octelium's resources
+### Reinstalling is not restoring Octelium's resources
 
-`octops init` re-creates the `octelium` namespace, truncates the resource table and flushes Valkey.
-So after `--uninstall` followed by a new install, the preserved database directory does **not**
-keep your Users, Services, Policies, IdentityProviders or Credentials. Before a reinstall:
+`--uninstall` removes the Kubernetes state, including Genesis checkpoints. A new v0.50.0+
+initialization refuses preserved storage belonging to the old Cluster; it does not restore
+that Cluster from the database directory. Earlier Genesis versions truncate the resource table
+and flush Valkey instead. Neither path is a recovery procedure. Before a reinstall:
 
 1. Establish whether this is configuration migration or disaster recovery. Migration needs a
    working API login and the source values for Secrets. Full recovery also needs a consistent
@@ -168,8 +174,9 @@ PY
 
 `--nat` only affects the Region external IP set during bootstrap, so re-running with it on an
 installed Cluster changes nothing. The documented path is `--uninstall` then install with `--nat`,
-which is a reset (above). The Gateway address annotation (`octelium.com/override-gw-ip`) is
-refreshed on every run from `--public-ip`/detection.
+which requires an explicit migration/reset plan (above); current Genesis refuses the preserved
+storage from the previous initialization. The Gateway address annotation
+(`octelium.com/override-gw-ip`) is refreshed on every run from `--public-ip`/detection.
 
 ### Changing domain
 

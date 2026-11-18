@@ -2,15 +2,15 @@
 
 The [CLI reference](https://octelium.com/docs/cordium/latest/use/cli.md) documents the current
 commands, examples and shared flags. Check `cordium <command> --help` for the installed CLI.
-The separate [v0.15.0 help snapshot](cli-cordium.md) is only an offline fallback for that version;
-it lacks Volumes, snapshots, `cordium code` and later fixes.
+The [v0.20.0 help snapshot](cli-cordium.md) is an offline fallback, including Volumes,
+snapshots and `cordium code`.
 
 ## Choose the command
 
 | Need | Command | Reference |
 | --- | --- | --- |
 | Create/start and attach interactively | `cordium run [WORKSPACE]` | [Running Workspaces](https://octelium.com/docs/cordium/latest/use/cli.md#running-workspaces) |
-| Create without attaching, optionally start and print JSON | `cordium create ws --file job.yaml --start -o json` | [Creating Workspaces](https://octelium.com/docs/cordium/latest/use/cli.md#creating-workspaces) |
+| Create JSON without attaching, then start | `cordium create ws --file job.yaml -o json`, then `cordium start <ws>` | [Creating Workspaces](https://octelium.com/docs/cordium/latest/use/cli.md#creating-workspaces) |
 | Start, stop or delete an existing Workspace | `cordium start`, `cordium stop`, `cordium delete ws` | [Lifecycle](https://octelium.com/docs/cordium/latest/use/cli.md#workspace-lifecycle) |
 | Run a command with its exit status | `cordium exec WORKSPACE --no-stdin -- CMD` | [Executing commands](https://octelium.com/docs/cordium/latest/use/cli.md#executing-commands) |
 | Follow image, repository and task output | `cordium logs WORKSPACE --timestamp --no-color` | [Logs](https://octelium.com/docs/cordium/latest/use/cli.md#logs) |
@@ -54,8 +54,9 @@ cordium start "$ws"
 cordium get ws "$ws" -o yaml
 ```
 
-The current reference also shows `create ws --start -o json`. If an installed CLI prints only
-a notification with `--start`, use separate create/start calls as above. `--start` initiates
+The online guide also shows `create ws --start -o json`, but v0.20.0 prints only a notification
+when `--start` is set, even with `-o json`. Use separate create/start calls to capture the
+generated name as above. `--start` initiates
 startup; it does not wait for `RUNNING`. For commands, wait for `RUNNING`
 with a deadline, then use `exec --no-stdin`. For foreground auto-stop tasks, wait for `STOPPED`
 and inspect `status.failure` and `status.stoppingReason`; successful jobs may stop before

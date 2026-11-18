@@ -15,7 +15,7 @@ compatibility: Cordium operations require an Octelium Session on a Cluster with 
 metadata:
   author: Octelium Labs, LLC
   version: "0.1.0"
-  verified-against: Cordium latest documentation (2026-10-09)
+  verified-against: cordium v0.20.0, Cordium latest documentation (2026-11-18)
 ---
 
 # Cordium: sandboxes on Octelium
@@ -138,7 +138,7 @@ Read only what the task needs:
 | Error messages, failure types, Kubernetes-level checks | [references/troubleshooting.md](references/troubleshooting.md) |
 | Current CLI workflow, flags and direct links to command sections | [references/cli-workflows.md](references/cli-workflows.md) |
 | SDK selection, readiness, cleanup and the built-in Cordium Agent | [references/api-and-agent.md](references/api-and-agent.md) |
-| Offline help for an installed v0.15.0 CLI only; lacks newer commands | [references/cli-cordium.md](references/cli-cordium.md) |
+| Exact `cordium` flags (v0.20.0 snapshot) | [references/cli-cordium.md](references/cli-cordium.md) |
 | Development server, CI, secretless agent, devcontainer and ClusterConfig YAML | [references/workspace-spec.md](references/workspace-spec.md#starting-point-assets) |
 
 ## Sources of truth
@@ -150,8 +150,8 @@ Read only what the task needs:
 2. **Resource structure:** the latest JSON Schema for the kind,
    `https://octelium.com/schemas/cordium/latest/cordium.v1.<Kind>.schema.json` (offline snapshot
    in `assets/schemas/`). Use it for exact field names, types and enums.
-3. **Installed-version syntax:** `cordium <command> --help`. The bundled v0.15.0 help is a
-   historical fallback, not a reference for current features. If a documented feature is
+3. **Installed-version syntax:** `cordium <command> --help`. The bundled v0.20.0 help is an
+   offline snapshot. If a documented feature is
    unavailable on the installed CLI or Cluster, identify the version mismatch before using it.
 4. **Unresolved details:** consult [Cordium source](https://github.com/octelium/cordium) for
    the relevant version. Do not turn an old implementation bug into current guidance.

@@ -1,7 +1,4 @@
 # Bootstrap for `octops init <DOMAIN> --bootstrap bootstrap.yaml` (octelium v0.40.0+).
-# Replace every <PLACEHOLDER>. Datastore passwords are referenced from Kubernetes Secrets that you
-# create beforehand in a namespace other than `octelium` (init deletes and re-creates `octelium`).
-# Genesis truncates the PostgreSQL resource table and flushes the Redis DB: both must be dedicated.
 spec:
   primaryStorage:
     postgresql:
